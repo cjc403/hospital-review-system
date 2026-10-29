@@ -2,6 +2,8 @@
 
 只用于本地演示。服务 http://127.0.0.1:18080，Vite 18173 将 /api 代理到后端。JSON UTF-8，不包 data 外壳。错误 {message:string}，400/403/404/409。角色标头 X-Demo-Role: quality（默认）/leader/department/information。写入只允许 quality；information 可登记政策。成员明细 leader/information 禁止。department 只见 CARD 科室，不可改管理规则。演示角色可切换，不是认证。
 
+leader/information 的 workspace 不返回病案级 reconciliations，数据核查只展示条款抽查汇总。重开已关闭改进单使用 PATCH /api/improvements/{id}，请求 {status:"reopen"}；后端恢复 opened，之后重新依次推进。
+
 ## 读取
 
 GET /api/health → {status:"ok",demo:true}
@@ -48,6 +50,8 @@ GET /api/reports/{scoreRunId} → DOCX 附件，报告数字来自该次保存�
 ## 写入
 
 写入成功返回该对象或 {id:string}；前端随后重新 GET workspace。禁止用前端临时状态冒充后端保存。
+
+政策 kind 固定为 national_standard / interpretation / indicator_pack / reference；impacts 数组只允许 clause / indicator_def / code_set / selection_set / scoring_rule。沿用原始01规范。涉及 scoring_rule 始终 blocked，禁止确认。
 
 | 方法 | 路径 | 请求 |
 | --- | --- | --- |
