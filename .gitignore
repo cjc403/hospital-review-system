@@ -1,0 +1,9 @@
+**/node_modules/
+**/target/
+**/dist/
+**/.runtime/
+**/test-results/
+**/playwright-report/
+**/*.log
+.superpowers/
+.DS_Store
