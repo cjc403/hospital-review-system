@@ -1,1 +1,1 @@
-﻿& (Join-Path $PSScriptRoot '医院等级评审系统\scripts\stop.ps1')
+﻿& (Join-Path $PSScriptRoot 'stop-demo.ps1')
