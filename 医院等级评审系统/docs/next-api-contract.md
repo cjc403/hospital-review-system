@@ -122,6 +122,18 @@ type Task={id,hospitalId,deptCode,versionId,clauseCode,title,assigneePost,priori
 
 **延期判定**：试算时读取本院该版本的前置结论与最新抽查。任一前置 `non_compliant`，或最新抽查错误率严格 `> 0.1`，等次为 `deferred`，`deferredReason` 分别写明"前置不符合：编码"与"错误率 x% 严格超过 10%"。监测指标符合比例不变。
 
+## 5.2 外部数据适配（只读预览）
+
+`GET /api/v2/integration/adapters`（review_office / indicator_admin）→ `{items:[{code,kind,description,configured}]}`
+未配置来源时返回空数组，不虚构适配器。
+
+`POST /api/v2/integration/adapters/{code}/fetch`（review_office / indicator_admin）
+`{period:"YYYY-MM"}` → `{code,period,count,rows:[{indicatorCode,numerator,denominator,value,unit}]}`
+- 适配器只输出指标级字段；患者姓名、住院号等上游字段一律丢弃（白名单映射）。
+- 未配置的适配器 → 404 `not_found`；取数失败（文件缺失、上游非 2xx）→ 409 `conflict` 并带可定位原因。
+- HTTP 适配器失败只重试一次，不做无限重试。
+- **取数结果只是预览**，写入仍必须走 `POST /api/v2/batches` 的质量门。
+
 ## 6. 数据质量、试算与报告
 
 `GET /api/v2/data-sources` → `[{id,code,name,kind,active}]`（`kind∈synthetic|csv|json|manual`）

@@ -2,6 +2,7 @@ package cn.demo.review.v2.web;
 
 import cn.demo.review.v2.assessment.AssessmentService;
 import cn.demo.review.v2.evidence.EvidenceService;
+import cn.demo.review.v2.integration.AdapterRegistry;
 import cn.demo.review.v2.platform.AuditService;
 import cn.demo.review.v2.platform.OrganizationService;
 import cn.demo.review.v2.quality.QualityService;
@@ -31,10 +32,12 @@ public class V2Controller {
     private final AuditService audit;
     private final OrganizationService organization;
     private final AssessmentService assessment;
+    private final AdapterRegistry adapters;
 
     public V2Controller(StandardService standards, TaskService tasks, EvidenceService evidence,
                         QualityService quality, ScoreService scores, AuditService audit,
-                        OrganizationService organization, AssessmentService assessment) {
+                        OrganizationService organization, AssessmentService assessment,
+                        AdapterRegistry adapters) {
         this.standards = standards;
         this.tasks = tasks;
         this.evidence = evidence;
@@ -43,6 +46,7 @@ public class V2Controller {
         this.audit = audit;
         this.organization = organization;
         this.assessment = assessment;
+        this.adapters = adapters;
     }
 
     @GetMapping("/me")
@@ -237,6 +241,36 @@ public class V2Controller {
     public Map<String, Object> samples(HttpServletRequest request,
                                        @RequestParam(defaultValue = "10") int limit) {
         return assessment.samples(AuthFilter.current(request), limit);
+    }
+
+    // ---------- 外部数据适配（只读预览） ----------
+
+    @GetMapping("/integration/adapters")
+    public Map<String, Object> integrationAdapters(HttpServletRequest request) {
+        AuthFilter.current(request).require("review_office", "indicator_admin");
+        return Map.of("items", adapters.list());
+    }
+
+    @PostMapping("/integration/adapters/{code}/fetch")
+    public Map<String, Object> fetchFromAdapter(HttpServletRequest request, @PathVariable String code,
+                                                @RequestBody JsonNode body) {
+        AuthContext ctx = AuthFilter.current(request);
+        ctx.require("review_office", "indicator_admin");
+        String period = body.path("period").asText("");
+        if (period.isBlank()) throw cn.demo.review.v2.V2Exception.badRequest("period 不能为空");
+        var rows = adapters.fetch(code, period);
+        audit.record(ctx, requestId(request), "读取外部数据源（预览）", "integration_adapter", code,
+                "周期=" + period + " 行数=" + rows.size());
+        return Map.of("code", code, "period", period, "count", rows.size(), "rows",
+                rows.stream().map(row -> {
+                    java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
+                    m.put("indicatorCode", row.indicatorCode());
+                    m.put("numerator", row.numerator());
+                    m.put("denominator", row.denominator());
+                    m.put("value", row.value());
+                    m.put("unit", row.unit());
+                    return m;
+                }).toList());
     }
 
     // ---------- 审计 ----------
