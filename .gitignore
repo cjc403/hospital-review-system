@@ -6,4 +6,5 @@
 **/playwright-report/
 **/*.log
 .superpowers/
+.workbuddy/
 .DS_Store

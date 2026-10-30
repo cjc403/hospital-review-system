@@ -1,0 +1,298 @@
+{
+  "package": {
+    "code": "GB-THIRD-2025-DEMO",
+    "title": "三级医院评审标准（2025年版）演示覆盖集",
+    "issuer": "国家卫生健康委员会（演示摘录，非官方全文）",
+    "sourceLocator": "policy/《三级医院评审标准（2025年版）》-20250610154952298.pdf"
+  },
+  "version": {
+    "versionNo": 1,
+    "publishedOn": "2026-10-01",
+    "effectiveFrom": "2026-10-01",
+    "appliesTo": "三级综合医院（演示）",
+    "note": "演示覆盖集：5 章、10 条款、14 项指标、30 条前置摘要；不声称覆盖全部 203 条日常监测指标。"
+  },
+  "chapters": [
+    { "code": "CH1", "title": "资源配置与运行", "sort": 1 },
+    { "code": "CH2", "title": "医疗服务能力与医院质量安全", "sort": 2 },
+    { "code": "CH3", "title": "重点专业质量控制", "sort": 3 },
+    { "code": "CH4", "title": "单病种（术种）质量控制", "sort": 4 },
+    { "code": "CH5", "title": "重点医疗技术临床应用质量控制", "sort": 5 }
+  ],
+  "clauses": [
+    {
+      "code": "CL-1.1",
+      "chapterCode": "CH1",
+      "title": "床位规模与人力资源配置",
+      "requirement": "医院实际开放床位、卫生技术人员配备应与功能定位和诊疗科目相匹配，并按年度留痕。",
+      "evidenceType": "制度文件 / 人员台账",
+      "ownerScope": "院级",
+      "evaluationMethod": "材料审核 + 数据核对",
+      "sourceLocator": "2025年版 第一部分 资源配置"
+    },
+    {
+      "code": "CL-1.2",
+      "chapterCode": "CH1",
+      "title": "运行效率与住院日管理",
+      "requirement": "医院应监测平均住院日等运行效率指标，异常波动应有分析与改进措施。",
+      "evidenceType": "运行分析报告",
+      "ownerScope": "院级",
+      "evaluationMethod": "数据核对",
+      "sourceLocator": "2025年版 第一部分 运行效率"
+    },
+    {
+      "code": "CL-2.1",
+      "chapterCode": "CH2",
+      "title": "医疗质量安全核心指标监测",
+      "requirement": "医院应建立手术患者死亡、手术并发症等质量安全指标的月度监测与异常处置机制。",
+      "evidenceType": "监测台账 / 分析报告",
+      "ownerScope": "医务部门",
+      "evaluationMethod": "数据核对 + 现场追踪",
+      "sourceLocator": "2025年版 第二部分 质量安全"
+    },
+    {
+      "code": "CL-2.2",
+      "chapterCode": "CH2",
+      "title": "合理用药与医院感染防控",
+      "requirement": "抗菌药物使用与医院感染发生率应纳入日常监测，超阈值须有原因分析与干预记录。",
+      "evidenceType": "药事与院感记录",
+      "ownerScope": "药学部门 / 院感部门",
+      "evaluationMethod": "数据核对",
+      "sourceLocator": "2025年版 第二部分 质量安全"
+    },
+    {
+      "code": "CL-2.3",
+      "chapterCode": "CH2",
+      "title": "核心制度与危急值管理",
+      "requirement": "危急值报告与处置、核心制度落实应有可追溯记录，并按期自查。",
+      "evidenceType": "检查记录 / 处置时间戳",
+      "ownerScope": "医务部门",
+      "evaluationMethod": "材料审核 + 抽查",
+      "sourceLocator": "2025年版 第二部分 核心制度"
+    },
+    {
+      "code": "CL-2.4",
+      "chapterCode": "CH2",
+      "title": "病例组合指数与收治能力",
+      "requirement": "CMI 等收治能力指标应按年度对比，口径与分组版本须保持一致。",
+      "evidenceType": "DRG 汇总数据",
+      "ownerScope": "病案统计部门",
+      "evaluationMethod": "数据核对",
+      "sourceLocator": "2025年版 第二部分 服务能力"
+    },
+    {
+      "code": "CL-3.1",
+      "chapterCode": "CH3",
+      "title": "手术安全与非计划重返手术室",
+      "requirement": "非计划重返手术室应逐例分析原因并落实改进，计划性分期手术须有标识。",
+      "evidenceType": "病例讨论记录",
+      "ownerScope": "手术科室 / 医务部门",
+      "evaluationMethod": "病例追踪",
+      "sourceLocator": "2025年版 第三部分 重点专业"
+    },
+    {
+      "code": "CL-3.2",
+      "chapterCode": "CH3",
+      "title": "处方点评与药学质控",
+      "requirement": "门诊处方点评应覆盖适应证、剂量与用法，点评结论应可追溯到处方明细。",
+      "evidenceType": "点评记录",
+      "ownerScope": "药学部门",
+      "evaluationMethod": "材料审核",
+      "sourceLocator": "2025年版 第三部分 药事管理"
+    },
+    {
+      "code": "CL-4.1",
+      "chapterCode": "CH4",
+      "title": "单病种过程质量监测",
+      "requirement": "目标术种应完成风险评估与规范预防，禁忌证须有记录。",
+      "evidenceType": "单病种上报数据",
+      "ownerScope": "相关临床科室",
+      "evaluationMethod": "数据核对",
+      "sourceLocator": "2025年版 第四部分 单病种"
+    },
+    {
+      "code": "CL-5.1",
+      "chapterCode": "CH5",
+      "title": "重点医疗技术临床应用管理",
+      "requirement": "限制类与重点技术应建立病例登记、结局随访与质量评价机制。",
+      "evidenceType": "技术管理档案",
+      "ownerScope": "医务部门 / 技术科室",
+      "evaluationMethod": "材料审核 + 病例追踪",
+      "sourceLocator": "2025年版 第五部分 重点技术"
+    }
+  ],
+  "indicators": [
+    {
+      "code": "i01", "name": "手术患者院内死亡率", "clauseCode": "CL-2.1", "chapterCode": "CH2",
+      "dimension": "质量安全", "unit": "%", "direction": "low", "scoreType": "interval_trend",
+      "annualAgg": "month_avg", "collectMode": "auto", "target": 0.3, "warn": 0.4,
+      "demoCurrent": 0.5, "demoDenominator": 2000,
+      "numeratorRule": "统计期内接受手术且在本次住院死亡的合成出院患者数；同一住院只计1例。",
+      "denominatorRule": "同期接受手术的合成出院患者数；院内死亡率=分子÷分母×100%。",
+      "includeRule": "按出院日期归期；纳入具有已完成手术标识及明确住院结局的合成住院记录。",
+      "excludeRule": "排除取消手术、门诊手术、缺少出院结局和重复住院标识的记录。"
+    },
+    {
+      "code": "i02", "name": "住院患者抗菌药物使用率", "clauseCode": "CL-2.2", "chapterCode": "CH2",
+      "dimension": "质量安全", "unit": "%", "direction": "low", "scoreType": "interval_trend",
+      "annualAgg": "month_avg", "collectMode": "auto", "target": 40, "warn": 55,
+      "demoCurrent": 58, "demoDenominator": 2000,
+      "numeratorRule": "住院期间至少使用1次全身抗菌药物的合成出院患者数；多次用药只计1例。",
+      "denominatorRule": "同一期合成出院患者总数；抗菌药物使用率=分子÷分母×100%。",
+      "includeRule": "按出院日期归期；演示药品目录标识为全身抗菌药物的用药事件计入。",
+      "excludeRule": "排除仅局部外用药物、已撤销医嘱、门诊用药和重复出院记录。"
+    },
+    {
+      "code": "i03", "name": "非计划重返手术室率", "clauseCode": "CL-3.1", "chapterCode": "CH3",
+      "dimension": "质量安全", "unit": "%", "direction": "low", "scoreType": "interval_trend",
+      "annualAgg": "month_avg", "collectMode": "auto", "target": 0.4, "warn": 0.7,
+      "demoCurrent": 0.25, "demoDenominator": 2000,
+      "numeratorRule": "本次住院首次手术后发生非计划再次进入手术室的合成患者数。",
+      "denominatorRule": "同期接受手术的合成出院患者数；非计划重返手术室率=分子÷分母×100%。",
+      "includeRule": "同一住院内核对首次与再次手术时间，并要求再次手术的plannedReturn标识明确为false。",
+      "excludeRule": "排除计划分期手术、再次手术时间早于首次手术、计划标识缺失及重复手术事件。"
+    },
+    {
+      "code": "i04", "name": "手术并发症发生率", "clauseCode": "CL-2.1", "chapterCode": "CH2",
+      "dimension": "质量安全", "unit": "%", "direction": "low", "scoreType": "interval_trend",
+      "annualAgg": "month_avg", "collectMode": "auto", "target": 1.5, "warn": 2.5,
+      "demoCurrent": 2.1, "demoDenominator": 2000,
+      "numeratorRule": "术后新发且被合成事件标识为手术相关并发症的出院患者数；同次住院只计1例。",
+      "denominatorRule": "同期接受手术的合成出院患者数；手术并发症发生率=分子÷分母×100%。",
+      "includeRule": "按出院日期归期；合成并发症发生时间须晚于本次手术开始时间。",
+      "excludeRule": "排除入院时已存在的同类病变、未完成手术、无时间先后信息及重复并发症记录。"
+    },
+    {
+      "code": "i05", "name": "医院感染发生率", "clauseCode": "CL-2.2", "chapterCode": "CH2",
+      "dimension": "质量安全", "unit": "%", "direction": "low", "scoreType": "interval_trend",
+      "annualAgg": "month_avg", "collectMode": "auto", "target": 1, "warn": 1.5,
+      "demoCurrent": 0.8, "demoDenominator": 2000,
+      "numeratorRule": "住院期间新发生且hospitalAcquired标识为true的医院感染合成病例数。",
+      "denominatorRule": "同期合成出院患者总数；医院感染发生率=分子÷分母×100%。",
+      "includeRule": "按出院日期归期；以合成感染事件与住院记录关联，每次住院有多次感染仍计1例。",
+      "excludeRule": "排除入院时已存在感染、仅定植且未认定感染、结论撤销和重复感染事件。"
+    },
+    {
+      "code": "i06", "name": "VTE规范预防率", "clauseCode": "CL-4.1", "chapterCode": "CH4",
+      "dimension": "质量安全", "unit": "%", "direction": "high", "scoreType": "interval_trend",
+      "annualAgg": "month_avg", "collectMode": "auto", "target": 90, "warn": 80,
+      "demoCurrent": 87, "demoDenominator": 500,
+      "numeratorRule": "完成VTE风险评估且按演示规则落实适宜药物或机械预防的合成目标术种病例数。",
+      "denominatorRule": "需要VTE预防且无相应禁忌证的合成目标术种病例数；规范预防率=分子÷分母×100%。",
+      "includeRule": "单病种（术种）样例限定为髋/膝关节置换及髋部骨折手术；按出院日期归期并核对预防完成标识。",
+      "excludeRule": "排除低风险无需预防、所有适宜预防方式均有禁忌证、术种不符及缺少风险评估的记录。"
+    },
+    {
+      "code": "i07", "name": "危急值及时处置率", "clauseCode": "CL-2.3", "chapterCode": "CH2",
+      "dimension": "质量安全", "unit": "%", "direction": "high", "scoreType": "interval_trend",
+      "annualAgg": "month_avg", "collectMode": "auto", "target": 95, "warn": 90,
+      "demoCurrent": 96.4, "demoDenominator": 500,
+      "numeratorRule": "首次有效危急值通知后30分钟内完成处置记录的合成住院病例数。",
+      "denominatorRule": "具有有效危急值通知的合成住院病例数；及时处置率=分子÷分母×100%。",
+      "includeRule": "每次住院选首条有效通知，核对通知与处置时间；30分钟仅为本演示的流程时限。",
+      "excludeRule": "排除复测后撤销的危急值、未成功送达通知、缺少时间戳及同次住院重复通知。"
+    },
+    {
+      "code": "i08", "name": "核心制度落实率", "clauseCode": "CL-2.3", "chapterCode": "CH2",
+      "dimension": "质量安全", "unit": "%", "direction": "high", "scoreType": "interval_trend",
+      "annualAgg": "month_avg", "collectMode": "manual", "target": 95, "warn": 90,
+      "demoCurrent": 94, "demoDenominator": 500,
+      "numeratorRule": "适用的核心制度检查项目全部记录为已落实的合成抽检住院病例数。",
+      "denominatorRule": "同一期完成适用项目检查的合成住院病例数；核心制度落实率=分子÷分母×100%。",
+      "includeRule": "演示抽检覆盖交接班、查对及疑难病例讨论等适用项目；人工填报须经质控审核才覆盖显示值。",
+      "excludeRule": "排除未完成检查、所有项目均不适用、检查结论撤销及重复抽检的病例记录。"
+    },
+    {
+      "code": "i09", "name": "门诊处方点评合格率", "clauseCode": "CL-3.2", "chapterCode": "CH3",
+      "dimension": "质量安全", "unit": "%", "direction": "high", "scoreType": "interval_trend",
+      "annualAgg": "month_avg", "collectMode": "auto", "target": 95, "warn": 90,
+      "demoCurrent": 98, "demoDenominator": 500,
+      "numeratorRule": "最终点评结论为合格的合成门诊处方记录数；每张处方只计1次。",
+      "denominatorRule": "同一期完成点评的合成门诊处方总数；处方点评合格率=分子÷分母×100%。",
+      "includeRule": "按点评完成日期归期；使用处方适应证、剂量和用法检查结果形成合成最终结论。",
+      "excludeRule": "排除未点评处方、作废处方、点评结论撤销、缺少处方标识及重复点评记录。"
+    },
+    {
+      "code": "i10", "name": "ECMO治疗成功撤机率（演示）", "clauseCode": "CL-5.1", "chapterCode": "CH5",
+      "dimension": "质量安全", "unit": "%", "direction": "high", "scoreType": "interval_trend",
+      "annualAgg": "month_avg", "collectMode": "auto", "target": 90, "warn": 85,
+      "demoCurrent": 92, "demoDenominator": 500,
+      "numeratorRule": "达到合成成功撤机标识的ECMO治疗疗程数；演示标识要求撤机后48小时内无需再次置管。",
+      "denominatorRule": "同期结束ECMO支持且具有完整撤机结局的合成疗程数；成功撤机率=分子÷分母×100%。",
+      "includeRule": "按ECMO支持结束日期归期，每个合成疗程计1次；数量仅供技术质控流程演示，不代表真实技术开展或临床规模。",
+      "excludeRule": "排除仍在ECMO支持、转院后结局不明、撤机后观察窗不足48小时及重复疗程记录。"
+    },
+    {
+      "code": "i11", "name": "病例组合指数（CMI）", "clauseCode": "CL-2.4", "chapterCode": "CH2",
+      "dimension": "服务效能", "unit": "", "direction": "high", "scoreType": "interval_trend",
+      "annualAgg": "drg_formula", "collectMode": "auto", "target": 1.2, "warn": 1,
+      "demoCurrent": 1.18, "demoDenominator": null, "demoAnnual": [1.22, 1.2, 1.19, 1.18],
+      "numeratorRule": "固定演示DRG权重版本下，各合成DRG组权重×该组出院病例数的加权总和。",
+      "denominatorRule": "纳入合成DRG分组的出院病例总数；CMI=各组权重与病例数乘积之和÷病例总数。",
+      "includeRule": "同一年度使用同一套固定合成分组与权重，按drg_formula读取预置汇总值；本演示不执行真实DRG分组。",
+      "excludeRule": "排除未分组、权重缺失、分组版本不一致及重复出院记录；不以ICD低风险病种替代DRG分组。"
+    },
+    {
+      "code": "i12", "name": "开放床位数", "clauseCode": "CL-1.1", "chapterCode": "CH1",
+      "dimension": "服务效能", "unit": "张", "direction": "high", "scoreType": "all_or_nothing",
+      "annualAgg": "year_end_snapshot", "collectMode": "auto", "target": 800, "warn": 700,
+      "demoCurrent": 850, "demoDenominator": null, "demoAnnual": [810, 830, 860, 850],
+      "numeratorRule": "年末12月31日实际可收治住院患者的开放床位数；单位为张，来自合成年末快照。",
+      "denominatorRule": "不适用；开放床位数=年末同一统计时点的实际开放床位计数，不计算分子分母比例。",
+      "includeRule": "统计可用于收治住院患者的普通病床和监护病床；年度值采用year_end_snapshot，同一张床只计1次。",
+      "excludeRule": "排除急诊留观床、日间治疗床、临时加床和已停用床位；不得把12个月床位数累加。"
+    },
+    {
+      "code": "i13", "name": "护士与医师人数比", "clauseCode": "CL-1.1", "chapterCode": "CH1",
+      "dimension": "服务效能", "unit": "", "direction": "high", "scoreType": "all_or_nothing",
+      "annualAgg": "year_end_snapshot", "collectMode": "auto", "target": 1.8, "warn": 1.5,
+      "demoCurrent": 1.7, "demoDenominator": null, "demoAnnual": [1.9, 1.85, 1.8, 1.7],
+      "numeratorRule": "年末同一统计时点在岗注册护士人数；来自合成人员快照，按人员标识去重。",
+      "denominatorRule": "同一时点在岗执业（助理）医师人数；护士与医师人数比=护士人数÷医师人数。",
+      "includeRule": "护士和医师均采用同一组织范围、同一时点的year_end_snapshot；演示比值不代表真实人员配备结论。",
+      "excludeRule": "排除未在岗、短期进修、资格无效和重复任职记录；不得将各月人员数直接相加。"
+    },
+    {
+      "code": "i14", "name": "平均住院日", "clauseCode": "CL-1.2", "chapterCode": "CH1",
+      "dimension": "服务效能", "unit": "天", "direction": "low", "scoreType": "interval_trend",
+      "annualAgg": "month_avg", "collectMode": "auto", "target": 7.5, "warn": 8.5,
+      "demoCurrent": 8.1, "demoDenominator": null,
+      "numeratorRule": "统计期内合成出院患者实际占用总床日；出院日期减入院日期，同日入出院按1日计。",
+      "denominatorRule": "同期合成出院患者人次数，包含死亡病例；平均住院日=实际占用总床日÷出院患者人次数。",
+      "includeRule": "按出院日期归期并完整计算跨月住院床日；演示年度month_avg采用12个月指标值均值。",
+      "excludeRule": "排除负住院日、入出院时间缺失、门诊及急诊留观和重复住院记录；分母为0时不计算。"
+    }
+  ],
+  "prerequisites": [
+    { "code": "PRE-01", "section": "床位规模与科室设置", "title": "床位规模与科室设置复核", "statement": "床位规模、科室设置应与功能定位和许可范围一致。", "systemGenerated": false },
+    { "code": "PRE-02", "section": "床位规模与科室设置", "title": "诊疗科目与许可范围", "statement": "开展的诊疗科目须在许可范围内，超范围项目应停止。", "systemGenerated": false },
+    { "code": "PRE-03", "section": "床位规模与科室设置", "title": "重点科室设置与能力", "statement": "重点科室应具备与功能定位匹配的人员与设备条件。", "systemGenerated": false },
+    { "code": "PRE-04", "section": "依法执业与规范服务", "title": "医疗机构依法执业", "statement": "不得出租承包科室，不得使用非卫生技术人员从事诊疗活动。", "systemGenerated": false },
+    { "code": "PRE-05", "section": "依法执业与规范服务", "title": "医师执业资格管理", "statement": "医师执业注册与实际执业范围应一致。", "systemGenerated": false },
+    { "code": "PRE-06", "section": "依法执业与规范服务", "title": "护士执业资格管理", "statement": "护士执业注册有效，排班与实际在岗一致。", "systemGenerated": false },
+    { "code": "PRE-07", "section": "依法执业与规范服务", "title": "医疗技术临床应用管理", "statement": "限制类技术应完成备案并开展质量评价。", "systemGenerated": false },
+    { "code": "PRE-08", "section": "依法执业与规范服务", "title": "药事服务与用药管理", "statement": "药事管理与药物治疗学委员会应履职并留痕。", "systemGenerated": false },
+    { "code": "PRE-09", "section": "依法执业与规范服务", "title": "医疗器械规范使用", "statement": "医疗器械应验收、维护并记录不良事件。", "systemGenerated": false },
+    { "code": "PRE-10", "section": "依法执业与规范服务", "title": "临床检验质量管理", "statement": "检验项目应开展室内质控并参加室间质评。", "systemGenerated": false },
+    { "code": "PRE-11", "section": "依法执业与规范服务", "title": "临床用血规范管理", "statement": "输血科应独立设置并执行用血审批与核对。", "systemGenerated": false },
+    { "code": "PRE-12", "section": "依法执业与规范服务", "title": "病历书写与管理", "statement": "病历书写应规范，归档与借阅可追溯。", "systemGenerated": false },
+    { "code": "PRE-13", "section": "依法执业与规范服务", "title": "核心制度落实", "statement": "十八项医疗质量安全核心制度应落实到岗到人。", "systemGenerated": false },
+    { "code": "PRE-14", "section": "依法执业与规范服务", "title": "患者隐私保护", "statement": "患者信息采集、使用与披露应符合隐私保护要求。", "systemGenerated": false },
+    { "code": "PRE-15", "section": "依法执业与规范服务", "title": "知情同意管理", "statement": "手术、特殊检查与治疗应取得书面知情同意。", "systemGenerated": false },
+    { "code": "PRE-16", "section": "依法执业与规范服务", "title": "医疗服务价格公示", "statement": "收费项目应公示，不得分解收费或重复收费。", "systemGenerated": false },
+    { "code": "PRE-17", "section": "公益性责任与行风诚信", "title": "公益性责任落实", "statement": "应承担公共卫生与应急医疗任务并留痕。", "systemGenerated": false },
+    { "code": "PRE-18", "section": "公益性责任与行风诚信", "title": "对口支援与帮扶", "statement": "对口支援应有协议、派驻记录和考核结果。", "systemGenerated": false },
+    { "code": "PRE-19", "section": "公益性责任与行风诚信", "title": "突发事件医疗救援", "statement": "应建立应急队伍与物资保障并定期演练。", "systemGenerated": false },
+    { "code": "PRE-20", "section": "公益性责任与行风诚信", "title": "医德医风管理", "statement": "医德考评应与晋升、绩效挂钩并留档。", "systemGenerated": false },
+    { "code": "PRE-21", "section": "公益性责任与行风诚信", "title": "行业作风管理", "statement": "不得收受红包回扣，应有投诉处理与追责机制。", "systemGenerated": false },
+    { "code": "PRE-22", "section": "公益性责任与行风诚信", "title": "投诉与纠纷处理", "statement": "投诉应有受理、调查、反馈闭环记录。", "systemGenerated": false },
+    { "code": "PRE-23", "section": "安全管理与重大事件", "title": "安全生产责任", "statement": "安全生产责任制应落实到岗，隐患整改闭环。", "systemGenerated": false },
+    { "code": "PRE-24", "section": "安全管理与重大事件", "title": "消防安全管理", "statement": "消防设施完好，疏散通道畅通并定期演练。", "systemGenerated": false },
+    { "code": "PRE-25", "section": "安全管理与重大事件", "title": "院感事件防控", "statement": "院感暴发应按要求报告、处置并追溯。", "systemGenerated": false },
+    { "code": "PRE-26", "section": "安全管理与重大事件", "title": "重大医疗事件管理", "statement": "重大医疗事件应按规定上报并开展根因分析。", "systemGenerated": false },
+    { "code": "PRE-27", "section": "安全管理与重大事件", "title": "信息与数据安全", "statement": "应有数据分级、访问控制、备份与应急恢复。", "systemGenerated": false },
+    { "code": "PRE-28", "section": "安全管理与重大事件", "title": "应急预案与演练", "statement": "各类应急预案应覆盖关键风险并年度演练。", "systemGenerated": false },
+    { "code": "PRE-29", "section": "安全管理与重大事件", "title": "重大风险整改复核", "statement": "上一周期遗留问题应有整改计划与复核结论。", "systemGenerated": false },
+    { "code": "SYS-TRUTH", "section": "系统数据真实性", "title": "条款抽查数据真实性（系统生成）", "statement": "由最新条款抽查结果驱动，不允许人工改为符合。", "systemGenerated": true }
+  ]
+}

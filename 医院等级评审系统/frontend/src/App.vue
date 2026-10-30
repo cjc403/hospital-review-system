@@ -18,6 +18,7 @@ import {
   Hospital,
   PanelLeftClose,
   PanelLeftOpen,
+  FolderTree,
   X,
   CheckCircle2,
   AlertCircle,
@@ -43,6 +44,7 @@ import ScoreView from "./components/ScoreView.vue";
 import ImprovementsView from "./components/ImprovementsView.vue";
 import PoliciesView from "./components/PoliciesView.vue";
 import OperationsView from "./components/OperationsView.vue";
+import ReviewWorkbench from "./v2/ReviewWorkbench.vue";
 const pages = [
   {
     id: "dashboard",
@@ -71,6 +73,13 @@ const pages = [
     icon: ClipboardCheck,
     component: ManualView,
     group: "工作台",
+  },
+  {
+    id: "workbench",
+    name: "评审作业台",
+    icon: FolderTree,
+    component: ReviewWorkbench,
+    group: "v0.2 作业中心",
   },
   {
     id: "prerequisites",

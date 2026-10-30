@@ -105,6 +105,146 @@ try {
   const reopened = await request(`/improvements/${improvementId}`, {method:'PATCH',body:{status:'reopen'}});
   assert.equal(reopened.status,'opened');
   passed('improvement evidence, sequential closure and reopening');
+
+  // ---------- v0.2 生产形态链路 ----------
+  async function v2request(path, { method = 'GET', body, role = 'quality', expected = 200 } = {}) {
+    const response = await fetch(base + '/api/v2' + path, {
+      method,
+      headers: { ...(role ? { 'X-Demo-Role': role } : {}), ...(body instanceof FormData || body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+      body: body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body),
+    });
+    const payload = await response.json().catch(() => ({}));
+    assert.equal(response.status, expected, `v2 ${method} ${path}: ${JSON.stringify(payload)}`);
+    return payload;
+  }
+
+  const me = await v2request('/me');
+  assert.equal(me.hospitalId, 'H001');
+  assert.deepEqual(me.roles, ['review_office']);
+  await v2request('/me', { role: null, expected: 401 });
+  passed('v2 identity context and unauthenticated rejection');
+
+  const standards = await v2request('/standards');
+  const version = standards.packages[0].versions.find(x => x.status === 'published');
+  assert.ok(version, 'a published standard version is required');
+  const tree = await v2request(`/standards/versions/${version.id}`);
+  assert.equal(tree.counts.chapters, 5);
+  assert.equal(tree.counts.clauses, 10);
+  assert.equal(tree.counts.indicators, 14);
+  await v2request(`/standards/versions/${version.id}/publish`, { method: 'POST', body: {}, expected: 409 });
+  passed('v2 standard tree and published immutability');
+
+  const requestKey = `integration-${Date.now()}`;
+  const assigned = await v2request('/tasks/assign', {
+    method: 'POST',
+    body: { versionId: version.id, clauseCodes: ['CL-2.1'], deptCode: 'CARD', dueDate: '2026-12-31', priority: 'high', requestKey },
+  });
+  assert.equal(assigned.tasks.length, 1);
+  const again = await v2request('/tasks/assign', {
+    method: 'POST',
+    body: { versionId: version.id, clauseCodes: ['CL-2.1'], deptCode: 'CARD', dueDate: '2026-12-31', priority: 'high', requestKey },
+  });
+  assert.equal(again.idempotent, true);
+  assert.equal(again.tasks[0].id, assigned.tasks[0].id);
+  passed('v2 task assignment idempotency');
+
+  const taskId = assigned.tasks[0].id;
+  await v2request(`/tasks/${taskId}`, { method: 'PATCH', body: { status: 'in_progress' }, role: 'department' });
+  await v2request(`/tasks/${taskId}`, { method: 'PATCH', body: { status: 'submitted' }, role: 'department' });
+  await v2request(`/tasks/${taskId}`, { method: 'PATCH', body: { status: 'accepted' }, role: 'department', expected: 403 });
+  await v2request(`/tasks/${taskId}`, { method: 'PATCH', body: { status: 'returned' }, expected: 400 });
+  await v2request(`/tasks/${taskId}`, { method: 'PATCH', body: { status: 'returned', comment: '材料缺少审批页' } });
+  await v2request(`/tasks/${taskId}`, { method: 'PATCH', body: { status: 'in_progress' }, role: 'department' });
+  await v2request(`/tasks/${taskId}`, { method: 'PATCH', body: { status: 'submitted' }, role: 'department' });
+  await v2request(`/tasks/${taskId}`, { method: 'PATCH', body: { status: 'accepted' } });
+  await v2request(`/tasks/${taskId}`, { method: 'PATCH', body: { status: 'in_progress' }, expected: 409 });
+  passed('v2 task state machine, department scope and terminal immutability');
+
+  const upload = new FormData();
+  upload.append('ownerType', 'task');
+  upload.append('ownerId', taskId);
+  upload.append('title', '集成检查材料');
+  upload.append('materialType', '检查记录');
+  upload.append('file', new Blob(['v2 evidence version one'], { type: 'text/plain' }), 'v2-evidence.txt');
+  const firstVersion = await v2request('/evidence', { method: 'POST', body: upload });
+  assert.equal(firstVersion.version.versionNo, 1);
+  const duplicate = new FormData();
+  duplicate.append('ownerType', 'task');
+  duplicate.append('ownerId', taskId);
+  duplicate.append('title', '集成检查材料');
+  duplicate.append('materialType', '检查记录');
+  duplicate.append('file', new Blob(['v2 evidence version one'], { type: 'text/plain' }), 'v2-evidence.txt');
+  const repeated = await v2request('/evidence', { method: 'POST', body: duplicate });
+  assert.equal(repeated.idempotent, true);
+  assert.equal(repeated.version.id, firstVersion.version.id);
+  const secondUpload = new FormData();
+  secondUpload.append('ownerType', 'task');
+  secondUpload.append('ownerId', taskId);
+  secondUpload.append('title', '集成检查材料');
+  secondUpload.append('materialType', '检查记录');
+  secondUpload.append('file', new Blob(['v2 evidence version two'], { type: 'text/plain' }), 'v2-evidence.txt');
+  const secondVersion = await v2request('/evidence', { method: 'POST', body: secondUpload });
+  assert.equal(secondVersion.version.versionNo, 2);
+  const itemId = secondVersion.item.id;
+  await v2request(`/evidence/${itemId}/review`, { method: 'POST', body: { decision: 'approved', note: '集成检查通过' } });
+  await v2request(`/evidence/${itemId}/review`, { method: 'POST', body: { decision: 'rejected' }, expected: 409 });
+  const download = await fetch(base + `/api/v2/evidence/versions/${firstVersion.version.id}/download`, { headers: { 'X-Demo-Role': 'quality' } });
+  assert.equal(download.status, 200);
+  assert.equal(await download.text(), 'v2 evidence version one');
+  passed('v2 evidence versions, hash idempotency, review and old version download');
+
+  const rejectedBatch = await v2request('/batches', {
+    method: 'POST',
+    body: { sourceCode: 'CSV-IMPORT', period: '2027-01', rows: [{ indicatorCode: 'i01', numerator: 2000, denominator: 1000, value: 120 }] },
+  });
+  assert.equal(rejectedBatch.batch.status, 'rejected');
+  assert.ok(rejectedBatch.issues.some(issue => issue.severity === 'error'));
+  await v2request(`/batches/${rejectedBatch.batch.id}/apply`, { method: 'POST', body: {}, expected: 409 });
+  passed('v2 quality gate blocks invalid batch from being applied');
+
+  const period = '2026-12';
+  const validBatch = await v2request('/batches', {
+    method: 'POST',
+    body: {
+      sourceCode: 'CSV-IMPORT',
+      period,
+      rows: [
+        { indicatorCode: 'i01', numerator: 940, denominator: 2000, value: 0.47 },
+        { indicatorCode: 'i02', numerator: 1100, denominator: 2000, value: 55 },
+        { indicatorCode: 'i14', value: 8.0 },
+      ],
+    },
+  });
+  assert.equal(validBatch.batch.status, 'validated');
+  await v2request(`/batches/${validBatch.batch.id}/apply`, { method: 'POST', body: {} });
+  await v2request(`/batches/${validBatch.batch.id}/apply`, { method: 'POST', body: {}, expected: 409 });
+  const replayed = await v2request(`/batches/${validBatch.batch.id}/replay`, { method: 'POST', body: {} });
+  assert.equal(replayed.batch.replayOf, validBatch.batch.id);
+  passed('v2 batch apply once, replay creates new batch');
+
+  const runA = await v2request('/score-runs', { method: 'POST', body: { versionId: version.id, cycleStart: 2023, cycleEnd: 2026 } });
+  assert.ok(runA.run.includedCount > 0);
+  assert.ok(runA.items.length >= runA.run.includedCount);
+  const report = await fetch(base + `/api/v2/score-runs/${runA.run.id}/report`, { headers: { 'X-Demo-Role': 'quality' } });
+  assert.equal(report.status, 200);
+  const reportBytes = Buffer.from(await report.arrayBuffer());
+  assert.equal(reportBytes.subarray(0, 2).toString(), 'PK');
+  assert.ok(reportBytes.includes(Buffer.from('word/document.xml')));
+  const rerun = await fetch(base + `/api/v2/score-runs/${runA.run.id}/report`, { headers: { 'X-Demo-Role': 'quality' } });
+  assert.ok(Buffer.from(await rerun.arrayBuffer()).equals(reportBytes), 'snapshot report must be byte-stable');
+  const runB = await v2request('/score-runs', { method: 'POST', body: { versionId: version.id, cycleStart: 2023, cycleEnd: 2026 } });
+  const comparison = await v2request(`/score-runs/${runA.run.id}/compare/${runB.run.id}`);
+  assert.ok(Array.isArray(comparison.recovered) && Array.isArray(comparison.worsened));
+  passed('v2 immutable snapshot, stable DOCX report and run comparison');
+
+  const audit = await v2request('/audit-events?limit=100');
+  const actions = audit.items.map(item => item.action);
+  assert.ok(actions.includes('分派条款任务'), 'audit must record assignment');
+  assert.ok(actions.includes('上传材料版本'), 'audit must record evidence upload');
+  assert.ok(actions.includes('导入数据批次'), 'audit must record batch import');
+  assert.ok(audit.items.every(item => item.requestId), 'audit must carry request id');
+  passed('v2 audit trail with request correlation id');
+
   console.log(`Integration checks passed: ${checks}. DOCX snapshot files: ${output}`);
 } finally {
   await request('/demo/reset', { method: 'POST', body: { confirm: 'RESET_DEMO' } });
