@@ -237,8 +237,30 @@ try {
   assert.ok(Array.isArray(comparison.recovered) && Array.isArray(comparison.worsened));
   passed('v2 immutable snapshot, stable DOCX report and run comparison');
 
-  const audit = await v2request('/audit-events?limit=100');
-  const actions = audit.items.map(item => item.action);
+  const prereqs = await v2request('/prerequisites');
+  assert.equal(prereqs.items.length, 30);
+  assert.equal(prereqs.items[0].compliance, 'unknown', '未维护的前置不能默认符合');
+  await v2request('/prerequisites/PRE-07', {
+    method: 'PUT',
+    body: { versionId: version.id, compliance: 'non_compliant', workflow: 'accepted', statement: '集成检查：条款不符合' },
+  });
+  await v2request('/prerequisites/SYS-TRUTH', {
+    method: 'PUT',
+    body: { versionId: version.id, compliance: 'compliant', workflow: 'accepted', statement: '试图改成符合' },
+    expected: 409,
+  });
+  const auditSample = await v2request('/audit-samples', { method: 'POST', body: { period: '2026-12' } });
+  assert.ok(auditSample.sampleCount > 0);
+  assert.equal(auditSample.items.length, auditSample.sampleCount);
+  const deferredRun = await v2request('/score-runs', {
+    method: 'POST',
+    body: { versionId: version.id, cycleStart: 2023, cycleEnd: 2026 },
+  });
+  assert.equal(deferredRun.run.grade, 'deferred');
+  assert.ok(deferredRun.run.deferredReason.includes('前置不符合'), deferredRun.run.deferredReason);
+  passed('v2 prerequisite conclusion, audit sample and deferral reason');
+
+  const audit = await v2request('/audit-events?limit=100');  const actions = audit.items.map(item => item.action);
   assert.ok(actions.includes('分派条款任务'), 'audit must record assignment');
   assert.ok(actions.includes('上传材料版本'), 'audit must record evidence upload');
   assert.ok(actions.includes('导入数据批次'), 'audit must record batch import');

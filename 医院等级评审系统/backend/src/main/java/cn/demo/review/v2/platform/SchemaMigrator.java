@@ -24,13 +24,18 @@ public class SchemaMigrator implements InitializingBean {
     @Override
     public void afterPropertiesSet() {
         jdbc.execute("CREATE TABLE IF NOT EXISTS schema_migration (version INT PRIMARY KEY, applied_at VARCHAR(40) NOT NULL)");
-        List<Integer> applied = jdbc.query("SELECT version FROM schema_migration",
-                (rs, row) -> rs.getInt(1));
-        if (applied.contains(V2Schema.VERSION)) return;
-        for (String ddl : V2Schema.DDL) jdbc.execute(ddl);
+        apply(V2Schema.VERSION, V2Schema.DDL);
+        apply(V3Schema.VERSION, V3Schema.DDL);
+    }
+
+    private void apply(int version, String[] ddl) {
+        Integer exists = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM schema_migration WHERE version=?", Integer.class, version);
+        if (exists != null && exists > 0) return;
+        for (String statement : ddl) jdbc.execute(statement);
         jdbc.update("INSERT INTO schema_migration (version, applied_at) VALUES (?, ?)",
-                V2Schema.VERSION, OffsetDateTime.now(ZoneId.of("Asia/Shanghai")).toString());
-        log.info("applied v0.2 schema migration version={}", V2Schema.VERSION);
+                version, OffsetDateTime.now(ZoneId.of("Asia/Shanghai")).toString());
+        log.info("applied v0.2 schema migration version={}", version);
     }
 
     /** 供测试与运维确认当前已应用版本。 */

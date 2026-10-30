@@ -2,6 +2,7 @@ package cn.demo.review.v2.score;
 
 import cn.demo.review.domain.Scoring;
 import cn.demo.review.v2.V2Exception;
+import cn.demo.review.v2.assessment.AssessmentService;
 import cn.demo.review.v2.platform.AuditService;
 import cn.demo.review.v2.quality.QualityService;
 import cn.demo.review.v2.security.AuthContext;
@@ -26,12 +27,15 @@ public class ScoreService {
     private final ObjectMapper json;
     private final AuditService audit;
     private final QualityService quality;
+    private final AssessmentService assessment;
 
-    public ScoreService(JdbcTemplate jdbc, ObjectMapper json, AuditService audit, QualityService quality) {
+    public ScoreService(JdbcTemplate jdbc, ObjectMapper json, AuditService audit, QualityService quality,
+                        AssessmentService assessment) {
         this.jdbc = jdbc;
         this.json = json;
         this.audit = audit;
         this.quality = quality;
+        this.assessment = assessment;
     }
 
     @Transactional
@@ -143,8 +147,14 @@ public class ScoreService {
                     joinSeries(yearValues), result.mergedValue(),
                     result.conform() == null ? null : (result.conform() ? 1 : 0), result.reasonCode());
         }
-        String grade = Scoring.grade(conformCount, included, false, 0d);
-        String deferredReason = included == 0 ? "无有效年度事实，不给出等次" : "";
+        Map<String, Object> deferral = assessment.deferralInputs(ctx.hospitalId(), versionId);
+        @SuppressWarnings("unchecked")
+        List<String> nonCompliantCodes = (List<String>) deferral.getOrDefault("nonCompliantCodes", List.of());
+        boolean nonCompliant = !nonCompliantCodes.isEmpty();
+        Object rawRate = deferral.get("errorRate");
+        Double errorRate = rawRate == null ? null : ((Number) rawRate).doubleValue();
+        String grade = Scoring.grade(conformCount, included, nonCompliant, errorRate == null ? 0d : errorRate);
+        String deferredReason = buildDeferralReason(included, nonCompliantCodes, errorRate);
 
         Map<String, Object> snapshot = new LinkedHashMap<>();
         snapshot.put("runId", runId);
@@ -154,6 +164,9 @@ public class ScoreService {
         snapshot.put("batchIds", batchIds);
         snapshot.put("factCount", facts.size());
         snapshot.put("evidence", approvedEvidence(ctx.hospitalId()));
+        snapshot.put("prereqNonCompliantCodes", nonCompliantCodes);
+        snapshot.put("auditSampleId", deferral.get("latestSampleId"));
+        snapshot.put("auditErrorRate", errorRate);
         snapshot.put("createdAt", now);
         String snapshotJson;
         try {
@@ -325,8 +338,20 @@ public class ScoreService {
                 }, hospitalId);
     }
 
-    private static String joinSeries(List<Map<String, Object>> yearValues) {
-        StringBuilder out = new StringBuilder();
+    /** 延期原因：前置不符合与抽查超阈值分开表述，便于报告直接引用。 */
+    private static String buildDeferralReason(int included, List<String> nonCompliantCodes, Double errorRate) {
+        List<String> reasons = new ArrayList<>();
+        if (nonCompliantCodes != null && !nonCompliantCodes.isEmpty()) {
+            reasons.add("前置不符合：" + String.join("、", nonCompliantCodes));
+        }
+        if (errorRate != null && errorRate > 0.1) {
+            reasons.add("最新条款抽查错误率 " + Math.round(errorRate * 10000) / 100d + "% 严格超过 10%");
+        }
+        if (included == 0) reasons.add("无有效年度事实，不给出等次");
+        return String.join("；", reasons);
+    }
+
+    private static String joinSeries(List<Map<String, Object>> yearValues) {        StringBuilder out = new StringBuilder();
         for (Map<String, Object> y : yearValues) {
             if (!out.isEmpty()) out.append("; ");
             out.append(y.get("year")).append(":").append(y.get("value"));

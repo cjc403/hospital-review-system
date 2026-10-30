@@ -37,6 +37,8 @@ class V2ApiTest {
     String versionId;
     String cardTaskId;
     String cardTaskRequestKey;
+    String earlierRunId;
+    String earlierRunGrade;
 
     @BeforeAll
     void start() throws Exception {
@@ -451,6 +453,8 @@ class V2ApiTest {
         assertTrue(first.path("run").path("includedCount").asInt() > 0, first.toString());
         assertEquals(first.path("run").path("includedCount").asInt(), first.path("items").size());
         String runId = first.path("run").path("id").asText();
+        earlierRunId = runId;
+        earlierRunGrade = first.path("run").path("grade").asText("");
 
         HttpResponse<byte[]> report = client.send(HttpRequest.newBuilder(
                         URI.create(base + "/score-runs/" + runId + "/report"))
@@ -510,6 +514,63 @@ class V2ApiTest {
 
         JsonNode runs = ok("GET", "/score-runs?limit=10", null);
         assertTrue(runs.path("items").size() >= 2, "试算列表应包含两次试算");
+    }
+
+    @Test
+    @Order(22)
+    void prerequisiteConclusionsAreScopedAndSystemClauseIsLocked() throws Exception {
+        JsonNode list = ok("GET", "/prerequisites?versionId=" + versionId, null);
+        assertEquals(30, list.path("items").size());
+        assertEquals("unknown", list.path("items").get(0).path("compliance").asText(),
+                "未维护时默认未知，不得默认符合");
+
+        JsonNode updated = ok("PUT", "/prerequisites/PRE-04",
+                "{\"versionId\":\"" + versionId + "\",\"compliance\":\"non_compliant\","
+                        + "\"workflow\":\"accepted\",\"statement\":\"演示：依法执业条款不符合\"}", "quality");
+        assertTrue(updated.path("nonCompliant").size() >= 1, updated.toString());
+
+        JsonNode locked = error(409, "PUT", "/prerequisites/SYS-TRUTH",
+                "{\"versionId\":\"" + versionId + "\",\"compliance\":\"compliant\","
+                        + "\"workflow\":\"accepted\",\"statement\":\"试图人工改为符合\"}", "quality");
+        assertEquals("immutable", locked.path("code").asText());
+
+        error(400, "PUT", "/prerequisites/PRE-05",
+                "{\"versionId\":\"" + versionId + "\",\"compliance\":\"unknown\","
+                        + "\"workflow\":\"accepted\",\"statement\":\"未知不得接纳\"}", "quality");
+        error(403, "PUT", "/prerequisites/PRE-06",
+                "{\"versionId\":\"" + versionId + "\",\"compliance\":\"compliant\","
+                        + "\"workflow\":\"accepted\",\"statement\":\"观察员无权\"}", "information");
+    }
+
+    @Test
+    @Order(23)
+    void auditSampleIsDerivedFromAppliedFacts() throws Exception {
+        JsonNode sample = ok("POST", "/audit-samples", "{\"period\":\"2026-10\"}");
+        int sampleCount = sample.path("sampleCount").asInt();
+        int errorCount = sample.path("errorCount").asInt();
+        assertTrue(sampleCount > 0, sample.toString());
+        assertEquals(sampleCount, sample.path("items").size());
+        assertEquals((double) errorCount / sampleCount, sample.path("errorRate").asDouble(), 1e-9);
+        for (JsonNode item : sample.path("items")) {
+            assertTrue(item.has("deviation"));
+            assertTrue(java.util.Set.of("error", "matched").contains(item.path("result").asText()));
+        }
+        JsonNode list = ok("GET", "/audit-samples", null);
+        assertTrue(list.path("items").size() >= 1);
+    }
+
+    @Test
+    @Order(24)
+    void scoreRunDefersOnPrerequisiteButKeepsEarlierRunUnchanged() throws Exception {
+        JsonNode run = ok("POST", "/score-runs",
+                "{\"versionId\":\"" + versionId + "\",\"cycleStart\":2023,\"cycleEnd\":2026}");
+        assertEquals("deferred", run.path("run").path("grade").asText(), run.toString());
+        String reason = run.path("run").path("deferredReason").asText();
+        assertTrue(reason.contains("前置不符合"), reason);
+
+        JsonNode earlier = ok("GET", "/score-runs/" + earlierRunId, null);
+        assertEquals(earlierRunGrade, earlier.path("run").path("grade").asText(""),
+                "历史快照不因新增前置结论而改变");
     }
 
     private static boolean isValidDocx(byte[] bytes) throws Exception {

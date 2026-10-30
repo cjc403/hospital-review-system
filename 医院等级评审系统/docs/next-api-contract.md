@@ -103,6 +103,25 @@ type Task={id,hospitalId,deptCode,versionId,clauseCode,title,assigneePost,priori
 `POST /api/v2/evidence/{itemId}/review` `{decision:"approved"|"rejected", note}`（review_office/evidence_admin）→ 已审核再审核 → 409。
 `GET /api/v2/evidence/versions/{versionId}/download` → 文件流；`Content-Disposition` 用原文件名；响应头不出现服务器路径。跨医院 404。
 
+## 5.1 前置要求与条款抽查
+
+`GET /api/v2/prerequisites?versionId=` → `{versionId, items:[{code,section,title,systemGenerated,compliance,workflow,statement,updatedBy,updatedAt}], nonCompliant:[code]}`
+未维护时 `compliance=unknown`、`workflow=draft`，**不默认符合**。
+
+`PUT /api/v2/prerequisites/{code}`（review_office）
+`{versionId, compliance:"compliant"|"non_compliant"|"unknown", workflow:"draft"|"submitted"|"accepted"|"rejected", statement}`
+- `systemGenerated=true` 的条款（SYS-TRUTH）→ 409 `immutable`。
+- `workflow=accepted` 且 `compliance=unknown` → 400。
+
+`POST /api/v2/audit-samples`（review_office）`{period:"YYYY-MM"}`
+- 用每个指标最新一条已应用事实对照标准目标线；`|fact-target|/|target| ≥ 10%` 记为错误条款；`target=0` 不参与判定。
+- 返回 `{id,period,sampleCount,errorCount,errorRate,items:[{indicatorCode,homeValue,factValue,deviation,result}]}`。
+- 无已应用事实 → 409 `conflict`。
+
+`GET /api/v2/audit-samples?limit=10` → `{items:[{id,period,sampleCount,errorCount,errorRate,createdAt}]}`
+
+**延期判定**：试算时读取本院该版本的前置结论与最新抽查。任一前置 `non_compliant`，或最新抽查错误率严格 `> 0.1`，等次为 `deferred`，`deferredReason` 分别写明"前置不符合：编码"与"错误率 x% 严格超过 10%"。监测指标符合比例不变。
+
 ## 6. 数据质量、试算与报告
 
 `GET /api/v2/data-sources` → `[{id,code,name,kind,active}]`（`kind∈synthetic|csv|json|manual`）

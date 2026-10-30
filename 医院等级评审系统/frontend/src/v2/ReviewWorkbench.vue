@@ -4,6 +4,7 @@ import ClauseCenter from "./ClauseCenter.vue";
 import TaskBoard from "./TaskBoard.vue";
 import EvidenceLibrary from "./EvidenceLibrary.vue";
 import DataBatches from "./DataBatches.vue";
+import PrereqAudit from "./PrereqAudit.vue";
 import ScoreCenter from "./ScoreCenter.vue";
 
 const tabs = [
@@ -11,6 +12,7 @@ const tabs = [
   { key: "task", label: "任务台", component: TaskBoard },
   { key: "evidence", label: "材料库", component: EvidenceLibrary },
   { key: "batch", label: "数据批次", component: DataBatches },
+  { key: "assess", label: "前置与抽查", component: PrereqAudit },
   { key: "score", label: "试算与报告", component: ScoreCenter },
 ];
 const active = ref("clause");

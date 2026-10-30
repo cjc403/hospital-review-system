@@ -1,5 +1,6 @@
 package cn.demo.review.v2.web;
 
+import cn.demo.review.v2.assessment.AssessmentService;
 import cn.demo.review.v2.evidence.EvidenceService;
 import cn.demo.review.v2.platform.AuditService;
 import cn.demo.review.v2.platform.OrganizationService;
@@ -29,10 +30,11 @@ public class V2Controller {
     private final ScoreService scores;
     private final AuditService audit;
     private final OrganizationService organization;
+    private final AssessmentService assessment;
 
     public V2Controller(StandardService standards, TaskService tasks, EvidenceService evidence,
                         QualityService quality, ScoreService scores, AuditService audit,
-                        OrganizationService organization) {
+                        OrganizationService organization, AssessmentService assessment) {
         this.standards = standards;
         this.tasks = tasks;
         this.evidence = evidence;
@@ -40,6 +42,7 @@ public class V2Controller {
         this.scores = scores;
         this.audit = audit;
         this.organization = organization;
+        this.assessment = assessment;
     }
 
     @GetMapping("/me")
@@ -209,6 +212,31 @@ public class V2Controller {
     public Map<String, Object> compare(HttpServletRequest request, @PathVariable String runId,
                                        @PathVariable String otherId) {
         return scores.compare(AuthFilter.current(request), runId, otherId);
+    }
+
+    // ---------- 前置与抽查 ----------
+
+    @GetMapping("/prerequisites")
+    public Map<String, Object> prerequisites(HttpServletRequest request,
+                                              @RequestParam(required = false) String versionId) {
+        return assessment.prerequisites(AuthFilter.current(request), versionId);
+    }
+
+    @PutMapping("/prerequisites/{code}")
+    public Map<String, Object> conclusion(HttpServletRequest request, @PathVariable String code,
+                                          @RequestBody JsonNode body) {
+        return assessment.setConclusion(AuthFilter.current(request), code, body, requestId(request));
+    }
+
+    @PostMapping("/audit-samples")
+    public Map<String, Object> createSample(HttpServletRequest request, @RequestBody JsonNode body) {
+        return assessment.createSample(AuthFilter.current(request), body, requestId(request));
+    }
+
+    @GetMapping("/audit-samples")
+    public Map<String, Object> samples(HttpServletRequest request,
+                                       @RequestParam(defaultValue = "10") int limit) {
+        return assessment.samples(AuthFilter.current(request), limit);
     }
 
     // ---------- 审计 ----------
