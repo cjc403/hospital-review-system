@@ -42,7 +42,7 @@ final class V2DocxReport {
             Object conform = item.get("conform");
             String conclusion = conform == null ? "不纳入 / " + item.get("reasonCode")
                     : (Boolean.TRUE.equals(conform) ? "符合 / " : "不符合 / ") + item.get("reasonCode");
-            row(table, String.valueOf(item.get("name")), String.valueOf(item.get("yearValues")),
+            row(table, String.valueOf(item.get("name")), formatYearValues(item.get("yearValues")),
                     value(item.get("mergedValue")) + String.valueOf(item.get("unit") == null ? "" : item.get("unit")),
                     conclusion);
         }
@@ -130,6 +130,18 @@ final class V2DocxReport {
                     .setScale(4, java.math.RoundingMode.HALF_UP).stripTrailingZeros().toPlainString();
         }
         return String.valueOf(value);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String formatYearValues(Object raw) {
+        if (!(raw instanceof List<?> list)) return String.valueOf(raw == null ? "" : raw);
+        StringBuilder out = new StringBuilder();
+        for (Object entry : list) {
+            if (!(entry instanceof Map<?, ?> map)) continue;
+            if (out.length() > 0) out.append("；");
+            out.append(map.get("year")).append(": ").append(value(map.get("value")));
+        }
+        return out.toString();
     }
 
     private static String percent(Object ratio) {

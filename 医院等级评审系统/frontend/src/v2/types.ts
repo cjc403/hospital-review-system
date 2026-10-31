@@ -207,7 +207,7 @@ export interface V2ScoreItem {
   indicatorCode: string;
   name: string;
   unit: string;
-  yearValues: string;
+  yearValues: { year: number; value: number | null }[];
   mergedValue: number | null;
   conform: boolean | null;
   reasonCode: string;

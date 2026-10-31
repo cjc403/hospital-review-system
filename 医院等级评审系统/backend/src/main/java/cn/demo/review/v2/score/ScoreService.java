@@ -8,6 +8,7 @@ import cn.demo.review.v2.quality.QualityService;
 import cn.demo.review.v2.security.AuthContext;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -70,35 +71,47 @@ public class ScoreService {
                 }, versionId);
         if (definitions.isEmpty()) throw V2Exception.conflict("该标准版本没有指标定义");
 
-        List<String> batchIds = quality.appliedBatchIds(ctx.hospitalId());
+        List<String> batchIds = quality.appliedBatchIds(ctx.hospitalId(), start, end);
         if (batchIds.isEmpty()) throw V2Exception.conflict("尚无已应用的数据批次，不能试算");
 
         List<Map<String, Object>> facts = jdbc.query(
-                "SELECT f.indicator_code, f.period_code, f.metric_value FROM metric_fact f"
+                "SELECT f.indicator_code, f.period_code, f.numerator, f.denominator, f.metric_value FROM metric_fact f"
                         + " JOIN collection_batch b ON b.id=f.batch_id"
-                        + " WHERE b.hospital_id=? AND b.status='applied' ORDER BY f.period_code",
+                        + " WHERE b.hospital_id=? AND b.status='applied' AND b.period_code>=? AND b.period_code<=?"
+                        + " ORDER BY f.period_code",
                 (rs, i) -> {
                     Map<String, Object> m = new LinkedHashMap<>();
                     m.put("code", rs.getString("indicator_code"));
                     m.put("period", rs.getString("period_code"));
+                    m.put("numerator", rs.getObject("numerator"));
+                    m.put("denominator", rs.getObject("denominator"));
                     m.put("value", rs.getObject("metric_value"));
                     return m;
-                }, ctx.hospitalId());
+                }, ctx.hospitalId(), start + "-01", end + "-12");
 
         Map<String, Map<Integer, List<Double>>> values = new HashMap<>();
-        Map<String, Map<Integer, String>> latestPeriod = new HashMap<>();
+        Map<String, Map<Integer, double[]>> formulaTotals = new HashMap<>();
         for (Map<String, Object> fact : facts) {
             String code = (String) fact.get("code");
             String period = (String) fact.get("period");
             int year = Integer.parseInt(period.substring(0, 4));
             if (year < start || year > end) continue;
+            Number numerator = (Number) fact.get("numerator");
+            Number denominator = (Number) fact.get("denominator");
+            if (numerator != null && denominator != null && Double.isFinite(numerator.doubleValue())
+                    && Double.isFinite(denominator.doubleValue()) && denominator.doubleValue() > 0) {
+                double[] totals = formulaTotals.computeIfAbsent(code, k -> new HashMap<>())
+                        .computeIfAbsent(year, k -> new double[2]);
+                totals[0] += numerator.doubleValue();
+                totals[1] += denominator.doubleValue();
+            }
             Double value = (Double) fact.get("value");
             if (value == null) continue;
             values.computeIfAbsent(code, k -> new HashMap<>()).computeIfAbsent(year, k -> new ArrayList<>()).add(value);
-            latestPeriod.computeIfAbsent(code, k -> new HashMap<>()).merge(year, period,
-                    (a, b) -> a.compareTo(b) >= 0 ? a : b);
         }
-        if (values.isEmpty()) throw V2Exception.conflict("所选周期没有可用的已应用事实");
+        if (values.isEmpty() && formulaTotals.isEmpty()) {
+            throw V2Exception.conflict("所选周期没有可用的已应用事实");
+        }
 
         String runId = "run-" + UUID.randomUUID();
         String now = now();
@@ -113,8 +126,14 @@ public class ScoreService {
             for (int year = start; year <= end; year++) {
                 List<Double> points = byYear.get(year);
                 Double annual = null;
-                if (points != null && !points.isEmpty()) {
+                if ("drg_formula".equals(annualAgg)) {
+                    double[] totals = formulaTotals.getOrDefault(code, Map.of()).get(year);
+                    if (totals != null && totals[1] > 0) {
+                        annual = totals[0] / totals[1];
+                    }
+                } else if (points != null && !points.isEmpty()) {
                     if ("year_end_snapshot".equals(annualAgg)) {
+                        // 年末快照指标取该年度最新批次值。
                         annual = points.get(points.size() - 1);
                     } else {
                         annual = points.stream().mapToDouble(Double::doubleValue).average().orElse(0);
@@ -122,7 +141,10 @@ public class ScoreService {
                     annual = Math.round(annual * 10000d) / 10000d;
                 }
                 series.add(annual);
-                yearValues.add(new LinkedHashMap<>(Map.of("year", year, "value", annual == null ? "" : annual)));
+                Map<String, Object> yearValue = new LinkedHashMap<>();
+                yearValue.put("year", year);
+                yearValue.put("value", annual);
+                yearValues.add(yearValue);
             }
             String direction = String.valueOf(def.get("direction"));
             String scoreType = String.valueOf(def.get("scoreType"));
@@ -144,7 +166,7 @@ public class ScoreService {
             jdbc.update("INSERT INTO score_item (id, run_id, indicator_code, name, unit, year_values, merged_value,"
                             + " conform, reason_code) VALUES (?,?,?,?,?,?,?,?,?)",
                     "si-" + UUID.randomUUID(), runId, code, def.get("name"), def.get("unit"),
-                    joinSeries(yearValues), result.mergedValue(),
+                    serializeYearValues(yearValues), result.mergedValue(),
                     result.conform() == null ? null : (result.conform() ? 1 : 0), result.reasonCode());
         }
         Map<String, Object> deferral = assessment.deferralInputs(ctx.hospitalId(), versionId);
@@ -219,7 +241,7 @@ public class ScoreService {
                     m.put("indicatorCode", rs.getString("indicator_code"));
                     m.put("name", rs.getString("name"));
                     m.put("unit", rs.getString("unit"));
-                    m.put("yearValues", rs.getString("year_values"));
+                    m.put("yearValues", parseYearValues(rs.getString("year_values")));
                     Object merged = rs.getObject("merged_value");
                     m.put("mergedValue", merged);
                     Object conform = rs.getObject("conform");
@@ -351,12 +373,46 @@ public class ScoreService {
         return String.join("；", reasons);
     }
 
-    private static String joinSeries(List<Map<String, Object>> yearValues) {        StringBuilder out = new StringBuilder();
-        for (Map<String, Object> y : yearValues) {
-            if (!out.isEmpty()) out.append("; ");
-            out.append(y.get("year")).append(":").append(y.get("value"));
+    private String serializeYearValues(List<Map<String, Object>> yearValues) {
+        try {
+            return json.writeValueAsString(yearValues);
+        } catch (Exception e) {
+            throw new IllegalStateException("年度值序列化失败", e);
         }
-        return out.length() > 500 ? out.substring(0, 500) : out.toString();
+    }
+
+    private List<Map<String, Object>> parseYearValues(String raw) {
+        if (raw == null || raw.isBlank()) return List.of();
+        try {
+            List<Map<String, Object>> parsed = json.readValue(raw,
+                    new TypeReference<List<Map<String, Object>>>() {});
+            List<Map<String, Object>> normalized = new ArrayList<>();
+            for (Map<String, Object> item : parsed) {
+                Map<String, Object> value = new LinkedHashMap<>();
+                value.put("year", ((Number) item.get("year")).intValue());
+                Object rawValue = item.get("value");
+                value.put("value", rawValue == null ? null : ((Number) rawValue).doubleValue());
+                normalized.add(value);
+            }
+            return normalized;
+        } catch (Exception ignored) {
+            // 兼容修复前已落库的 "2023:1.2; 2024:" 文本格式。
+            List<Map<String, Object>> legacy = new ArrayList<>();
+            for (String token : raw.split(";")) {
+                String[] pair = token.trim().split(":", 2);
+                if (pair.length != 2) continue;
+                try {
+                    Map<String, Object> value = new LinkedHashMap<>();
+                    value.put("year", Integer.parseInt(pair[0].trim()));
+                    String number = pair[1].trim();
+                    value.put("value", number.isEmpty() ? null : Double.parseDouble(number));
+                    legacy.add(value);
+                } catch (NumberFormatException ignoredLegacy) {
+                    return List.of();
+                }
+            }
+            return legacy;
+        }
     }
 
     private static String now() {

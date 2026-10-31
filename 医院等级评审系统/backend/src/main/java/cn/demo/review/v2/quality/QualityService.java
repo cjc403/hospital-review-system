@@ -281,6 +281,14 @@ public class QualityService {
                 (rs, i) -> rs.getString(1), hospitalId);
     }
 
+    /** 只返回落在评审周期内的已应用批次，供快照记录真实数据血缘。 */
+    public List<String> appliedBatchIds(String hospitalId, int cycleStart, int cycleEnd) {
+        return jdbc.query("SELECT id FROM collection_batch WHERE hospital_id=? AND status='applied'"
+                        + " AND period_code>=? AND period_code<=? ORDER BY created_at",
+                (rs, i) -> rs.getString(1), hospitalId,
+                cycleStart + "-01", cycleEnd + "-12");
+    }
+
     /** 批次列表：只返回本院数据，按创建时间倒序。 */
     public Map<String, Object> list(AuthContext ctx, int limit) {
         List<Map<String, Object>> items = jdbc.query(

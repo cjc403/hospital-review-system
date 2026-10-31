@@ -448,10 +448,43 @@ class V2ApiTest {
     @Test
     @Order(19)
     void scoreRunProducesImmutableSnapshotAndComparableRuns() throws Exception {
+        JsonNode outsideBatch = ok("POST", "/batches", batchBody("2027-01", row("i11", 2.20, 220.0, 100.0)));
+        String outsideBatchId = outsideBatch.path("batch").path("id").asText();
+        ok("POST", "/batches/" + outsideBatchId + "/apply", "{}");
+        JsonNode missingDrgBatch = ok("POST", "/batches", batchBody("2025-01", row("i11", 1.80, null, null)));
+        ok("POST", "/batches/" + missingDrgBatch.path("batch").path("id").asText() + "/apply", "{}");
+        JsonNode missingDrgRun = ok("POST", "/score-runs",
+                "{\"versionId\":\"" + versionId + "\",\"cycleStart\":2025,\"cycleEnd\":2025}");
+        for (JsonNode item : missingDrgRun.path("items")) {
+            if ("i11".equals(item.path("indicatorCode").asText())) {
+                assertTrue(item.path("yearValues").isArray());
+                assertTrue(item.path("yearValues").get(0).path("value").isNull(),
+                        "缺少 DRG 分子/分母时年度值必须缺失");
+                assertEquals("not_applicable", item.path("reasonCode").asText());
+            }
+        }
+
+        JsonNode drgBatch = ok("POST", "/batches", batchBody("2026-11", row("i11", 1.00, 100.0, 100.0)));
+        String drgBatchId = drgBatch.path("batch").path("id").asText();
+        ok("POST", "/batches/" + drgBatchId + "/apply", "{}");
+        JsonNode drgBatch2 = ok("POST", "/batches", batchBody("2026-12", row("i11", 0.30, 300.0, 1000.0)));
+        String drgBatchId2 = drgBatch2.path("batch").path("id").asText();
+        ok("POST", "/batches/" + drgBatchId2 + "/apply", "{}");
         JsonNode first = ok("POST", "/score-runs",
                 "{\"versionId\":\"" + versionId + "\",\"cycleStart\":2023,\"cycleEnd\":2026}");
         assertTrue(first.path("run").path("includedCount").asInt() > 0, first.toString());
         assertEquals(first.path("run").path("includedCount").asInt(), first.path("items").size());
+        assertTrue(first.path("items").get(0).path("yearValues").isArray(),
+                "试算详情的年度值必须是结构化数组");
+        JsonNode snapshot = json.readTree(first.path("run").path("snapshot").asText());
+        assertFalse(snapshot.path("batchIds").toString().contains(outsideBatchId),
+                "周期外批次不得进入试算快照血缘");
+        for (JsonNode item : first.path("items")) {
+            if ("i11".equals(item.path("indicatorCode").asText())) {
+                assertEquals(0.3636, item.path("mergedValue").asDouble(), 0.0001,
+                        "drg_formula 应按年度分子分母加权计算，不应按月度平均");
+            }
+        }
         String runId = first.path("run").path("id").asText();
         earlierRunId = runId;
         earlierRunGrade = first.path("run").path("grade").asText("");

@@ -153,6 +153,8 @@ type Task={id,hospitalId,deptCode,versionId,clauseCode,title,assigneePost,priori
 `POST /api/v2/score-runs`（review_office）
 `{versionId, cycleStart, cycleEnd}`（1–4 年，2023–2026）
 - 只使用 `applied` 批次的事实；按 `annualAgg` 聚合到年度；无可用事实 → 409 `conflict`。
+- `GET /api/v2/score-runs/{id}` 返回的每个 `items[].yearValues` 始终是结构化数组 `[{year:number,value:number|null}]`；缺失年度使用 `value:null`，不得把数据库序列化文本直接透出。
+- `annualAgg:"drg_formula"` 只使用同一年度内同时提供 `numerator` 与正 `denominator` 的已应用事实，按 `Σnumerator / Σdenominator` 计算年度 CMI；没有完整分子/分母输入时该年度为 `null` 并标记不可适用，不得退化为月度平均或直接取 `value`。
 - 结果保存不可变快照（含使用的批次 ID、指标口径版本、证据版本清单）；无更新/删除端点。
 `GET /api/v2/score-runs/{id}` → `{run, items[]}`
 `GET /api/v2/score-runs?limit=20` → `{items:[{id,versionId,versionNo,cycleStart,cycleEnd,grade,conformCount,includedCount,ratio,deferredReason,createdAt}]}`，仅本院，按创建时间倒序。

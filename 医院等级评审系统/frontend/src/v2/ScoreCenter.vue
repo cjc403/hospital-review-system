@@ -110,6 +110,12 @@ function conclusion(item: V2ScoreItem): string {
   return conclusionLabel(item);
 }
 
+function formatYearValues(item: V2ScoreItem): string {
+  return item.yearValues
+    .map((year) => `${year.year}: ${year.value ?? "—"}`)
+    .join("；");
+}
+
 onMounted(async () => {
   await Promise.all([loadReference(), loadRuns()]);
 });
@@ -237,7 +243,7 @@ onMounted(async () => {
           <tbody>
             <tr v-for="item in detail.items" :key="item.indicatorCode">
               <td>{{ item.name }}</td>
-              <td class="muted">{{ item.yearValues }}</td>
+              <td class="muted">{{ formatYearValues(item) }}</td>
               <td class="numeric">
                 {{ item.mergedValue ?? "—" }}{{ item.unit }}
               </td>
