@@ -87,7 +87,7 @@ public class ReportService {
                     return m;
                 }, ctx.hospitalId(), from, to);
         List<Map<String, Object>> improvements = jdbc.query(
-                "SELECT id, alert_id, metric_code, status, review_conclusion, owner FROM v3_improvement"
+                "SELECT id, alert_id, metric_code, status, review_conclusion, owner, evidence_item_id FROM v3_improvement"
                         + " WHERE hospital_id=? ORDER BY created_at",
                 (rs, i) -> {
                     Map<String, Object> m = new LinkedHashMap<>();
@@ -97,8 +97,29 @@ public class ReportService {
                     m.put("status", rs.getString("status"));
                     m.put("conclusion", rs.getString("review_conclusion"));
                     m.put("owner", rs.getString("owner"));
+                    m.put("evidenceItemId", rs.getString("evidence_item_id"));
                     return m;
                 }, ctx.hospitalId());
+        List<Map<String, Object>> evidence = new ArrayList<>();
+        for (Map<String, Object> improvement : improvements) {
+            Object evidenceItemId = improvement.get("evidenceItemId");
+            if (evidenceItemId == null) continue;
+            List<Map<String, Object>> versions = jdbc.query(
+                    "SELECT i.title, v.version_no, v.sha256, v.file_name FROM evidence_item i"
+                            + " JOIN evidence_version v ON v.item_id=i.id"
+                            + " WHERE i.id=? AND i.hospital_id=?"
+                            + " AND v.version_no=(SELECT MAX(v2.version_no) FROM evidence_version v2 WHERE v2.item_id=i.id)",
+                    (rs, i) -> {
+                        Map<String, Object> m = new LinkedHashMap<>();
+                        m.put("improvementId", improvement.get("id"));
+                        m.put("title", rs.getString("title"));
+                        m.put("versionNo", rs.getInt("version_no"));
+                        m.put("sha256", rs.getString("sha256"));
+                        m.put("fileName", rs.getString("file_name"));
+                        return m;
+                    }, evidenceItemId, ctx.hospitalId());
+            evidence.addAll(versions);
+        }
         Set<String> batchIds = new LinkedHashSet<>();
         Set<String> definitionKeys = new LinkedHashSet<>();
         for (Map<String, Object> result : results) {
@@ -114,6 +135,7 @@ public class ReportService {
         snapshot.put("improvements", improvements);
         snapshot.put("batchIds", List.copyOf(batchIds));
         snapshot.put("definitions", List.copyOf(definitionKeys));
+        snapshot.put("evidence", evidence);
         snapshot.put("generatedAt", now());
 
         String id = "rep-" + UUID.randomUUID();
@@ -270,6 +292,17 @@ public class ReportService {
             paragraph(body, "三、数据来源", true);
             paragraph(body, "引用批次：" + snapshot.getOrDefault("batchIds", List.of()), false);
             paragraph(body, "引用指标定义：" + snapshot.getOrDefault("definitions", List.of()), false);
+            Object evidence = snapshot.get("evidence");
+            if (evidence instanceof List<?> list && !list.isEmpty()) {
+                paragraph(body, "复核证据版本：", false);
+                for (Object entry : list) {
+                    Map<String, Object> item = (Map<String, Object>) entry;
+                    paragraph(body, "  " + item.get("title") + "：版本 " + item.get("versionNo")
+                            + "，SHA-256 " + item.get("sha256") + "，文件 " + item.get("fileName"), false);
+                }
+            } else {
+                paragraph(body, "复核证据版本：无（本次整改未附材料）", false);
+            }
             paragraph(body, "本报告绑定生成时的快照；后续批次、整改或定义版本变化不会改变本报告内容。", false);
 
             String document = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"

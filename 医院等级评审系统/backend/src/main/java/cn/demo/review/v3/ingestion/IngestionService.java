@@ -291,7 +291,8 @@ public class IngestionService {
                 String resultId = insertResult(ctx, definition, spec, result, period, dept, batchId, versionId);
                 created++;
                 recordLineage(ctx.hospitalId(), "batch", batchId, "result", resultId, "computed");
-                raiseAlerts(ctx, result, spec, dept, period, metricCode, resultId, (String) definition.get("name"));
+                raiseAlerts(ctx, result, spec, dept, period, metricCode, resultId, (String) definition.get("name"),
+                        previousResultValue(ctx.hospitalId(), metricCode, dept, period));
             }
             jdbc.update("INSERT INTO v3_trace (id, batch_id, metric_code, formula_type, rule_version, executed_at,"
                             + " duration_ms, detail) VALUES (?,?,?,?,?,?,?,?)",
@@ -326,7 +327,8 @@ public class IngestionService {
     }
 
     private void raiseAlerts(AuthContext ctx, FormulaEngine.Result result, FormulaEngine.Spec spec, String dept,
-                             String period, String metricCode, String resultId, String metricName) {
+                             String period, String metricCode, String resultId, String metricName,
+                             Double previousValue) {
         List<String[]> alerts = new ArrayList<>();
         if (result.value() == null) {
             alerts.add(new String[]{"missing_data", "medium", "本期无有效值：" + result.reasonCode()});
@@ -336,6 +338,19 @@ public class IngestionService {
         } else if ("yellow".equals(result.light())) {
             alerts.add(new String[]{"low".equals(spec.direction()) ? "over_warning" : "below_target",
                     "medium", "当前值 " + result.value() + " 处于预警区间"});
+        }
+        if (result.value() != null && previousValue != null && previousValue != 0) {
+            boolean high = "high".equals(spec.direction());
+            boolean worse = high ? result.value() < previousValue : result.value() > previousValue;
+            if (worse) {
+                alerts.add(new String[]{"worsening", "medium",
+                        "较上期 " + previousValue + " 恶化至 " + result.value()});
+            }
+            double change = Math.abs(result.value() - previousValue) / Math.abs(previousValue);
+            if (change > 0.5) {
+                alerts.add(new String[]{"jump", "medium",
+                        "较上期 " + previousValue + " 跳变 %.0f%%".formatted(change * 100)});
+            }
         }
         for (String[] alert : alerts) {
             Integer existing = jdbc.queryForObject(
@@ -497,6 +512,14 @@ public class IngestionService {
     }
 
     private Double previousAppliedValue(String hospitalId, String metricCode, String deptCode, String period) {
+        List<Double> values = jdbc.query(
+                "SELECT metric_value FROM metric_result WHERE hospital_id=? AND metric_code=? AND dept_code=?"
+                        + " AND period_code<? AND metric_value IS NOT NULL ORDER BY period_code DESC",
+                (rs, i) -> (Double) rs.getObject(1), hospitalId, metricCode, deptCode, period);
+        return values.isEmpty() ? null : values.get(0);
+    }
+
+    private Double previousResultValue(String hospitalId, String metricCode, String deptCode, String period) {
         List<Double> values = jdbc.query(
                 "SELECT metric_value FROM metric_result WHERE hospital_id=? AND metric_code=? AND dept_code=?"
                         + " AND period_code<? AND metric_value IS NOT NULL ORDER BY period_code DESC",

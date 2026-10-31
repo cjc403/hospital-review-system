@@ -353,6 +353,24 @@ class V3ApiTest {
         assertEquals(401, anonymous.statusCode());
     }
 
+    @Test
+    @Order(10)
+    void worseningAndJumpAlertsAreRaisedAgainstPreviousPeriod() throws Exception {
+        // i03 上一期为 0.3%，本期 1.0%：低优指标恶化且跳变超过 50%
+        String rows = row("i03", "SURG", 20d, 2000d, null, "%");
+        JsonNode detail = ok("POST", "/ingestion/batches", batchBody("2027-01", rows));
+        assertEquals("validated", detail.path("batch").path("status").asText(), detail.toString());
+        ok("POST", "/ingestion/batches/" + detail.path("batch").path("id").asText() + "/apply", "{}");
+
+        JsonNode alerts = ok("GET", "/alerts", null).path("items");
+        Set<String> types = new HashSet<>();
+        for (JsonNode alert : alerts) {
+            if ("i03".equals(alert.path("metricCode").asText())) types.add(alert.path("type").asText());
+        }
+        assertTrue(types.contains("worsening"), "连续恶化应产生预警：" + types);
+        assertTrue(types.contains("jump"), "异常跳变应产生预警：" + types);
+    }
+
     private static boolean isValidDocx(byte[] bytes) throws Exception {
         if (bytes.length < 4 || bytes[0] != 'P' || bytes[1] != 'K') return false;
         boolean document = false;

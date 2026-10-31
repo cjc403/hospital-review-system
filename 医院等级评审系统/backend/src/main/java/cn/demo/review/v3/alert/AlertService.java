@@ -166,6 +166,9 @@ public class AlertService {
         jdbc.update("UPDATE v3_improvement SET status='closed', review_conclusion=?, review_note=?,"
                         + " evidence_item_id=?, closed_at=?, updated_at=? WHERE id=? AND hospital_id=?",
                 conclusion, body.path("note").asText(""), evidenceItemId, now(), now(), id, ctx.hospitalId());
+        if (evidenceItemId != null && !evidenceItemId.isBlank()) {
+            ingestion.recordLineage(ctx.hospitalId(), "improvement", id, "evidence", evidenceItemId, "proves");
+        }
         audit.record(ctx, requestId, "整改复核", "v3_improvement", id, "结论=" + conclusion);
         return improvementRow(ctx, id);
     }
