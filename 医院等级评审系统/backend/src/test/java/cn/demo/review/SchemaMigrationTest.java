@@ -28,9 +28,15 @@ class SchemaMigrationTest {
                 "--demo.upload-dir=" + root.resolve("uploads"),
                 "--spring.main.banner-mode=off")) {
             SchemaMigrator migrator = context.getBean(SchemaMigrator.class);
-            assertEquals(List.of(2, 3, 4), migrator.appliedVersions(), "迁移应按版本递增且只应用一次");
+            assertEquals(List.of(2, 3, 4, 5), migrator.appliedVersions(), "迁移应按版本递增且只应用一次");
 
             JdbcTemplate jdbc = context.getBean(JdbcTemplate.class);
+            Integer columns = jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='V3_IMPROVEMENT'"
+                            + " AND COLUMN_NAME IN ('SOURCE_TYPE','TARGET_VALUE','BASELINE_VALUE','LATEST_VALUE')",
+                    Integer.class);
+            assertEquals(4, columns, "v0.5 追加列应存在");
+
             for (String table : List.of("HOSPITAL", "DEPARTMENT", "STANDARD_PACKAGE", "STANDARD_VERSION",
                     "STANDARD_CHAPTER", "STANDARD_CLAUSE", "INDICATOR_DEFINITION", "PREREQ_DEFINITION",
                     "REVIEW_TASK", "ASSIGNMENT_REQUEST", "EVIDENCE_ITEM", "EVIDENCE_VERSION", "DATA_SOURCE",

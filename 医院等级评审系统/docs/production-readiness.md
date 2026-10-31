@@ -13,7 +13,7 @@
 - 证据：版本 + SHA-256 + 审核 + 下载授权 + 危险文件/魔数拦截；存储走 `BlobStore` 接口（当前本地目录实现）。
 - 迁移：`V2Schema` 版本 2（H2 与 PostgreSQL 同构 DDL），`db/migration/postgresql/V2__v02_core.sql`。
 - 可观测性：`X-Request-Id` 贯穿过滤链与审计；`/api/health`；结构化错误体。
-- 验证（v3 交付后）：后端 **78 项**、前端 **36 项**、集成检查 **24 组**（v1 七组 + v0.2 十组 + v3 七组）；PostgreSQL 迁移（版本 4，34 张表）与备份恢复已在临时隔离集群验证。
+- 验证（v3 交付后）：后端 **79 项**、前端 **36 项**、集成检查 **25 组**（v1 七组 + v0.2 十组 + v3 七组）；PostgreSQL 迁移（版本 4，34 张表）与备份恢复已在临时隔离集群验证。
 
 ## 2. 尚未验证（必须写清楚）
 
@@ -52,7 +52,7 @@
 
 ## 4.1 v3 新增（数据中台）
 
-- 契约：`docs/v3-api-contract.md`；迁移版本 4（11 张表）：`metric_definition`、`source_mapping`、`ingestion_batch`、`canonical_fact`、`v3_quality_issue`、`v3_trace`、`lineage_edge`、`metric_result`、`v3_alert`、`v3_improvement`、`v3_report`。
+- 契约：`docs/v3-api-contract.md`；迁移版本 4（11 张表）+ 版本 5（整改表 5 列）：`metric_definition`、`source_mapping`、`ingestion_batch`、`canonical_fact`、`v3_quality_issue`、`v3_trace`、`lineage_edge`、`metric_result`、`v3_alert`、`v3_improvement`、`v3_report`。
 - 受控公式：ratio / weighted_ratio / month_avg / year_end_snapshot / drg_formula / trend；其他类型 400 `formula_not_allowed`。
 - 已本地验证：批次阻断与重放、i11 加权不得退化为平均、i12 年末快照、科室范围、预警状态机、整改复核、报告字节稳定。
 - 仍未验证：真实数据源、患者级明细授权视图、预警通知与升级、性能容量。

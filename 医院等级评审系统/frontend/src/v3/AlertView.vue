@@ -16,7 +16,7 @@ const assignDraft = ref({ assignee: "", dueDate: "2026-12-31", note: "" });
 const improving = ref("");
 const improveDraft = ref({ rootCause: "", action: "", owner: "", dueDate: "2026-12-31" });
 const reviewing = ref("");
-const reviewDraft = ref({ conclusion: "partially_improved", note: "" });
+const reviewDraft = ref({ conclusion: "partially_improved", note: "", evidenceItemId: "" });
 
 const canWrite = computed(() => role.value === "quality");
 const statusLabels: Record<string, string> = {
@@ -98,6 +98,10 @@ async function createImprovement(alert: V3Alert) {
 }
 
 async function review(improvement: V3Improvement) {
+  if (!reviewDraft.value.evidenceItemId.trim()) {
+    notify("关闭整改必须填写复核证据材料 ID（可先在 v0.2 材料库上传）", true);
+    return;
+  }
   busy.value = true;
   try {
     await v3(`/improvements/${improvement.id}/review`, {
@@ -256,7 +260,13 @@ onMounted(async () => {
                     {{ improvement.status === "closed" ? "已关闭" : "整改中" }}
                   </span>
                 </td>
-                <td>{{ improvement.reviewConclusion || "—" }}</td>
+                <td>
+                  {{ improvement.reviewConclusion || "—" }}
+                  <div v-if="improvement.baselineValue !== null" class="cell-sub muted">
+                    基线 {{ improvement.baselineValue }} → 最新 {{ improvement.latestValue ?? "—" }}
+                    <span v-if="improvement.targetValue !== null"> / 目标 {{ improvement.targetValue }}</span>
+                  </div>
+                </td>
                 <td>
                   <button
                     v-if="canWrite && improvement.status !== 'closed'"
@@ -278,6 +288,11 @@ onMounted(async () => {
                       <option value="invalidated">问题不成立</option>
                     </select>
                     <input v-model="reviewDraft.note" placeholder="复核说明" aria-label="复核说明" />
+                    <input
+                      v-model="reviewDraft.evidenceItemId"
+                      placeholder="复核证据材料 ID（必填）"
+                      aria-label="复核证据材料 ID"
+                    />
                     <button class="button primary" :disabled="busy" @click="review(improvement)">提交复核</button>
                     <button class="button" @click="reviewing = ''">取消</button>
                   </div>

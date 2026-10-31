@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.*;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.io.ByteArrayInputStream;
 import java.net.URI;
@@ -299,13 +300,24 @@ class V3ApiTest {
                 "{\"conclusion\":\"whatever\",\"note\":\"乱填\"}", "quality");
         assertEquals("validation_failed", bad.path("code").asText());
 
+        JsonNode noEvidence = error(400, "POST", "/improvements/" + improvementId + "/review",
+                "{\"conclusion\":\"improved\",\"note\":\"没有证据就想关闭\"}", "quality");
+        assertEquals("validation_failed", noEvidence.path("code").asText());
+
+        JdbcTemplate jdbc = context.getBean(JdbcTemplate.class);
+        jdbc.update("INSERT INTO evidence_item (id, hospital_id, owner_type, owner_id, title, material_type, status,"
+                        + " valid_until, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                "evi-v3-test", "H001", "improvement", improvementId, "整改佐证材料", "检查记录",
+                "approved", null, "test", "2026-10-31");
         JsonNode closed = ok("POST", "/improvements/" + improvementId + "/review",
-                "{\"conclusion\":\"partially_improved\",\"note\":\"已落实术前讨论，观察下期数据\"}");
+                "{\"conclusion\":\"partially_improved\",\"note\":\"已落实术前讨论，观察下期数据\","
+                        + "\"evidenceItemId\":\"evi-v3-test\"}");
         assertEquals("closed", closed.path("status").asText());
         assertEquals("partially_improved", closed.path("reviewConclusion").asText());
+        assertEquals("evi-v3-test", closed.path("evidenceItemId").asText());
 
         JsonNode again = error(409, "POST", "/improvements/" + improvementId + "/review",
-                "{\"conclusion\":\"improved\",\"note\":\"重复复核\"}", "quality");
+                "{\"conclusion\":\"improved\",\"note\":\"重复复核\",\"evidenceItemId\":\"evi-v3-test\"}", "quality");
         assertEquals("immutable", again.path("code").asText());
     }
 
@@ -369,6 +381,38 @@ class V3ApiTest {
         }
         assertTrue(types.contains("worsening"), "连续恶化应产生预警：" + types);
         assertTrue(types.contains("jump"), "异常跳变应产生预警：" + types);
+    }
+
+    @Test
+    @Order(11)
+    void improvementFromResultChapterFilterAndHospitalIsolation() throws Exception {
+        JsonNode items = results("2026-11");
+        JsonNode target = findByCode(items, "i01", "CARD");
+
+        // 指标结果可直接建整改，并带上基线值
+        JsonNode improvement = ok("POST", "/improvements",
+                "{\"sourceType\":\"result\",\"sourceId\":\"" + target.path("id").asText() + "\","
+                        + "\"rootCause\":\"记录口径不一致\",\"action\":\"统一病案首页口径\","
+                        + "\"owner\":\"病案室\",\"dueDate\":\"2026-12-31\"}");
+        assertEquals("result", improvement.path("sourceType").asText());
+        assertNotNull(improvement.get("baselineValue"), "整改应带基线值以便复核前后对比");
+
+        // 章节筛选：结果自带 chapterCode，筛选后同一章节
+        String chapter = items.get(0).path("chapterCode").asText();
+        assertFalse(chapter.isBlank(), "结果应带章节编码");
+        JsonNode filtered = ok("GET", "/metric-results?chapterCode=" + chapter, null).path("items");
+        assertTrue(filtered.size() > 0);
+        for (JsonNode item : filtered) {
+            assertEquals(chapter, item.path("chapterCode").asText());
+        }
+
+        // 跨医院隔离：另一家医院的结果不可见
+        JdbcTemplate jdbc = context.getBean(JdbcTemplate.class);
+        jdbc.update("INSERT INTO metric_result (id, hospital_id, definition_id, metric_code, metric_name, period_code,"
+                        + " dept_code, metric_value, light, computed_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                "res-h002", "H002", "def-x", "i01", "另一医院结果", "2026-11", "CARD", 0.5, "red", "2026-11-30");
+        JsonNode notFound = error(404, "GET", "/metric-results/res-h002", null, "quality");
+        assertEquals("not_found", notFound.path("code").asText());
     }
 
     private static boolean isValidDocx(byte[] bytes) throws Exception {

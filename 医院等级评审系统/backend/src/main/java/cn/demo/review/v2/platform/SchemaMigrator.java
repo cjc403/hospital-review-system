@@ -27,6 +27,7 @@ public class SchemaMigrator implements InitializingBean {
         apply(V2Schema.VERSION, V2Schema.DDL);
         apply(V3Schema.VERSION, V3Schema.DDL);
         apply(V4Schema.VERSION, V4Schema.DDL);
+        apply(V5Schema.VERSION, V5Schema.DDL);
     }
 
     private void apply(int version, String[] ddl) {

@@ -102,8 +102,9 @@ public class V3Controller {
                                              @RequestParam(required = false) String period,
                                              @RequestParam(required = false) String deptCode,
                                              @RequestParam(required = false) String versionId,
+                                             @RequestParam(required = false) String chapterCode,
                                              @RequestParam(defaultValue = "100") int limit) {
-        return results.list(AuthFilter.current(request), metricCode, period, deptCode, versionId, limit);
+        return results.list(AuthFilter.current(request), metricCode, period, deptCode, versionId, chapterCode, limit);
     }
 
     @GetMapping("/metric-results/{id}")
@@ -160,6 +161,11 @@ public class V3Controller {
     @PostMapping("/improvements/from-alert")
     public Map<String, Object> improvementFromAlert(HttpServletRequest request, @RequestBody JsonNode body) {
         return alerts.createFromAlert(AuthFilter.current(request), body, requestId(request));
+    }
+
+    @PostMapping("/improvements")
+    public Map<String, Object> improvementFromSource(HttpServletRequest request, @RequestBody JsonNode body) {
+        return alerts.createFromSource(AuthFilter.current(request), body, requestId(request));
     }
 
     @GetMapping("/improvements")

@@ -350,13 +350,43 @@ try {
     body: { conclusion: 'whatever', note: '乱填' },
     expected: 400,
   });
+  await v3request(`/improvements/${v3Improvement.id}/review`, {
+    method: 'POST',
+    body: { conclusion: 'improved', note: '没有证据' },
+    expected: 400,
+  });
+  const v3Proof = new FormData();
+  v3Proof.append('ownerType', 'improvement');
+  v3Proof.append('ownerId', v3Improvement.id);
+  v3Proof.append('title', 'v3 整改佐证');
+  v3Proof.append('materialType', '检查记录');
+  v3Proof.append('file', new Blob(['v3 improvement proof'], { type: 'text/plain' }), 'v3-proof.txt');
+  const v3Evidence = await request('/v2/evidence', { method: 'POST', body: v3Proof });
   const v3Closed = await v3request(`/improvements/${v3Improvement.id}/review`, {
     method: 'POST',
-    body: { conclusion: 'partially_improved', note: '已落实术前讨论' },
+    body: { conclusion: 'partially_improved', note: '已落实术前讨论', evidenceItemId: v3Evidence.item.id },
   });
   assert.equal(v3Closed.status, 'closed');
-  await v3request(`/improvements/${v3Improvement.id}/review`, { method: 'POST', body: { conclusion: 'improved', note: '重复' }, expected: 409 });
-  passed('v3 PDCA improvement closes only with a valid review conclusion');
+  assert.equal(v3Closed.evidenceItemId, v3Evidence.item.id);
+  await v3request(`/improvements/${v3Improvement.id}/review`, {
+    method: 'POST',
+    body: { conclusion: 'improved', note: '重复', evidenceItemId: v3Evidence.item.id },
+    expected: 409,
+  });
+  passed('v3 PDCA improvement requires evidence and a valid review conclusion');
+
+  const v3FromResult = await v3request('/improvements', {
+    method: 'POST',
+    body: { sourceType: 'result', sourceId: v3I11.id, rootCause: '口径不一致', action: '统一口径', owner: '病案室', dueDate: '2026-12-31' },
+  });
+  assert.equal(v3FromResult.sourceType, 'result');
+  assert.ok(v3FromResult.baselineValue !== null);
+  const v3Chapter = v3Results.items[0].chapterCode;
+  assert.ok(v3Chapter, '结果应带章节编码');
+  const v3Filtered = await v3request(`/metric-results?chapterCode=${encodeURIComponent(v3Chapter)}`);
+  assert.ok(v3Filtered.items.length > 0);
+  assert.ok(v3Filtered.items.every(item => item.chapterCode === v3Chapter));
+  passed('v3 improvement from result and chapter filter verified');
 
   const v3Report = await v3request('/reports', {
     method: 'POST',

@@ -110,12 +110,9 @@ public class AlertService {
         ctx.require("review_office");
         String alertId = text(body, "alertId");
         Map<String, Object> alert = alertRow(ctx, alertId);
-        String improvementId = "imp-" + UUID.randomUUID();
-        jdbc.update("INSERT INTO v3_improvement (id, hospital_id, alert_id, metric_code, metric_name, root_cause,"
-                        + " action_text, owner, due_date, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-                improvementId, ctx.hospitalId(), alertId, alert.get("metricCode"), alert.get("metricName"),
-                text(body, "rootCause"), text(body, "action"), text(body, "owner"),
-                body.path("dueDate").asText(""), "open", now(), now());
+        Double baseline = lookupResultValue(ctx, (String) alert.get("resultId"));
+        String improvementId = insertImprovement(ctx, alertId, "alert", alertId,
+                (String) alert.get("metricCode"), (String) alert.get("metricName"), body, baseline);
         if (!"assigned".equals(alert.get("status")) && !TERMINAL.contains(String.valueOf(alert.get("status")))) {
             jdbc.update("UPDATE v3_alert SET status='assigned', updated_at=? WHERE id=? AND hospital_id=?",
                     now(), alertId, ctx.hospitalId());
@@ -125,10 +122,108 @@ public class AlertService {
         return improvementRow(ctx, improvementId);
     }
 
+    /** 条款抽查或指标结果也可以直接建整改，来源与基线一并留痕。 */
+    @Transactional
+    public Map<String, Object> createFromSource(AuthContext ctx, JsonNode body, String requestId) {
+        ctx.require("review_office");
+        String sourceType = text(body, "sourceType");
+        String sourceId = text(body, "sourceId");
+        String metricCode = null;
+        String metricName = null;
+        Double baseline = null;
+        Double target = null;
+        switch (sourceType) {
+            case "result" -> {
+                List<Map<String, Object>> rows = jdbc.query(
+                        "SELECT metric_code, metric_name, metric_value, target_value FROM metric_result"
+                                + " WHERE id=? AND hospital_id=?",
+                        (rs, i) -> {
+                            Map<String, Object> m = new LinkedHashMap<>();
+                            m.put("code", rs.getString("metric_code"));
+                            m.put("name", rs.getString("metric_name"));
+                            m.put("value", rs.getObject("metric_value"));
+                            m.put("target", rs.getObject("target_value"));
+                            return m;
+                        }, sourceId, ctx.hospitalId());
+                if (rows.isEmpty()) throw V2Exception.notFound("指标结果不存在或不在可见范围");
+                metricCode = (String) rows.get(0).get("code");
+                metricName = (String) rows.get(0).get("name");
+                baseline = toDouble(rows.get(0).get("value"));
+                target = toDouble(rows.get(0).get("target"));
+            }
+            case "audit_sample" -> {
+                List<Map<String, Object>> rows = jdbc.query(
+                        "SELECT error_rate FROM audit_sample WHERE id=? AND hospital_id=?",
+                        (rs, i) -> Map.<String, Object>of("rate", rs.getObject("error_rate") == null ? 0d : rs.getDouble(1)),
+                        sourceId, ctx.hospitalId());
+                if (rows.isEmpty()) throw V2Exception.notFound("条款抽查不存在或不在可见范围");
+                metricName = "条款抽查错误率";
+                baseline = toDouble(rows.get(0).get("rate"));
+                target = 0.1;
+            }
+            case "task" -> {
+                List<Map<String, Object>> rows = jdbc.query(
+                        "SELECT clause_code, title FROM review_task WHERE id=? AND hospital_id=?",
+                        (rs, i) -> Map.<String, Object>of("code", rs.getString("clause_code"), "title", rs.getString("title")),
+                        sourceId, ctx.hospitalId());
+                if (rows.isEmpty()) throw V2Exception.notFound("任务不存在或不在可见范围");
+                metricCode = (String) rows.get(0).get("code");
+                metricName = String.valueOf(rows.get(0).get("title"));
+            }
+            default -> throw V2Exception.badRequest("sourceType 只能是 result、audit_sample 或 task");
+        }
+        String improvementId = insertImprovement(ctx, null, sourceType, sourceId, metricCode, metricName, body,
+                baseline, target);
+        ingestion.recordLineage(ctx.hospitalId(), sourceType, sourceId, "improvement", improvementId, "escalates");
+        audit.record(ctx, requestId, "由" + sourceType + "创建整改", "v3_improvement", improvementId,
+                "来源=" + sourceId);
+        return improvementRow(ctx, improvementId);
+    }
+
+    private String insertImprovement(AuthContext ctx, String alertId, String sourceType, String sourceId,
+                                     String metricCode, String metricName, JsonNode body,
+                                     Double baseline) {
+        return insertImprovement(ctx, alertId, sourceType, sourceId, metricCode, metricName, body, baseline, null);
+    }
+
+    private String insertImprovement(AuthContext ctx, String alertId, String sourceType, String sourceId,
+                                     String metricCode, String metricName, JsonNode body,
+                                     Double baseline, Double target) {
+        String id = "imp-" + UUID.randomUUID();
+        // 三元表达式一侧是基本类型 double 时会把另一侧 Double 拆箱，null 会 NPE，这里显式赋值。
+        Double targetValue = target;
+        if (body.path("targetValue").isNumber()) targetValue = body.get("targetValue").asDouble();
+        Double baselineValue = baseline;
+        if (body.path("baselineValue").isNumber()) baselineValue = body.get("baselineValue").asDouble();
+        Double latestValue = baseline;
+        if (body.path("latestValue").isNumber()) latestValue = body.get("latestValue").asDouble();
+        jdbc.update("INSERT INTO v3_improvement (id, hospital_id, alert_id, metric_code, metric_name, root_cause,"
+                        + " action_text, owner, due_date, status, source_type, source_id, target_value,"
+                        + " baseline_value, latest_value, created_at, updated_at)"
+                        + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                id, ctx.hospitalId(), alertId, metricCode, metricName,
+                text(body, "rootCause"), text(body, "action"), text(body, "owner"),
+                body.path("dueDate").asText(""), "open", sourceType, sourceId,
+                targetValue, baselineValue, latestValue, now(), now());
+        return id;
+    }
+
+    private Double lookupResultValue(AuthContext ctx, String resultId) {
+        if (resultId == null) return null;
+        List<Double> values = jdbc.query("SELECT metric_value FROM metric_result WHERE id=? AND hospital_id=?",
+                (rs, i) -> (Double) rs.getObject(1), resultId, ctx.hospitalId());
+        return values.isEmpty() ? null : values.get(0);
+    }
+
+    private static Double toDouble(Object value) {
+        return value instanceof Number number ? number.doubleValue() : null;
+    }
+
     public Map<String, Object> listImprovements(AuthContext ctx, String status) {
         StringBuilder sql = new StringBuilder(
                 "SELECT id, alert_id, metric_code, metric_name, root_cause, action_text, owner, due_date, status,"
-                        + " review_conclusion, review_note, evidence_item_id, closed_at, created_at, updated_at"
+                        + " review_conclusion, review_note, evidence_item_id, closed_at, created_at, updated_at,"
+                        + " source_type, source_id, target_value, baseline_value, latest_value"
                         + " FROM v3_improvement WHERE hospital_id=?");
         List<Object> args = new ArrayList<>();
         args.add(ctx.hospitalId());
@@ -157,12 +252,13 @@ public class AlertService {
         String conclusion = text(body, "conclusion");
         if (!CONCLUSIONS.contains(conclusion)) throw V2Exception.badRequest("复核结论取值不合法");
         String evidenceItemId = body.path("evidenceItemId").asText(null);
-        if (evidenceItemId != null && !evidenceItemId.isBlank()) {
-            Integer exists = jdbc.queryForObject(
-                    "SELECT COUNT(*) FROM evidence_item WHERE id=? AND hospital_id=?",
-                    Integer.class, evidenceItemId, ctx.hospitalId());
-            if (exists == null || exists == 0) throw V2Exception.badRequest("佐证材料不存在于本院");
+        if (evidenceItemId == null || evidenceItemId.isBlank()) {
+            throw V2Exception.badRequest("关闭整改必须附复核证据材料");
         }
+        Integer exists = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM evidence_item WHERE id=? AND hospital_id=?",
+                Integer.class, evidenceItemId, ctx.hospitalId());
+        if (exists == null || exists == 0) throw V2Exception.badRequest("佐证材料不存在于本院");
         jdbc.update("UPDATE v3_improvement SET status='closed', review_conclusion=?, review_note=?,"
                         + " evidence_item_id=?, closed_at=?, updated_at=? WHERE id=? AND hospital_id=?",
                 conclusion, body.path("note").asText(""), evidenceItemId, now(), now(), id, ctx.hospitalId());
@@ -188,7 +284,8 @@ public class AlertService {
     private Map<String, Object> improvementRow(AuthContext ctx, String id) {
         List<Map<String, Object>> rows = jdbc.query(
                 "SELECT id, alert_id, metric_code, metric_name, root_cause, action_text, owner, due_date, status,"
-                        + " review_conclusion, review_note, evidence_item_id, closed_at, created_at, updated_at"
+                        + " review_conclusion, review_note, evidence_item_id, closed_at, created_at, updated_at,"
+                        + " source_type, source_id, target_value, baseline_value, latest_value"
                         + " FROM v3_improvement WHERE id=? AND hospital_id=?",
                 (rs, i) -> improvementMap(rs), id, ctx.hospitalId());
         if (rows.isEmpty()) throw V2Exception.notFound("整改不存在或不在可见范围");
@@ -238,6 +335,11 @@ public class AlertService {
         m.put("closedAt", rs.getString("closed_at"));
         m.put("createdAt", rs.getString("created_at"));
         m.put("updatedAt", rs.getString("updated_at"));
+        m.put("sourceType", rs.getString("source_type"));
+        m.put("sourceId", rs.getString("source_id"));
+        m.put("targetValue", rs.getObject("target_value"));
+        m.put("baselineValue", rs.getObject("baseline_value"));
+        m.put("latestValue", rs.getObject("latest_value"));
         return m;
     }
 

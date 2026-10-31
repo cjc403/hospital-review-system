@@ -31,6 +31,7 @@ function result(partial: Partial<V3Result>): V3Result {
     definitionId: "def-1",
     definitionVersion: 2,
     formulaType: "ratio",
+    chapterCode: "CH-2",
     computedAt: "2026-11-30T00:00:00+08:00",
     ...partial,
   };

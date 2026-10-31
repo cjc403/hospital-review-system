@@ -60,12 +60,13 @@
 
 ## 5. 结果、下钻与预警
 
-`GET /api/v3/metric-results?metricCode=&period=&deptCode=&versionId=` → `{items:[Result]}`
+`GET /api/v3/metric-results?metricCode=&period=&deptCode=&versionId=&chapterCode=` → `{items:[Result]}`
+- `chapterCode` 来自标准章节（通过指标定义关联），结果同时返回该字段，供章节筛选与前端分组。
 ```ts
 type Result={id,hospitalId,metricCode,metricName,unit,direction,period,deptCode,
  value:number|null,numerator:number|null,denominator:number|null,light:'green'|'yellow'|'red'|'na',
  target:number|null,warning:number|null,reasonCode,qualityStatus,batchId,definitionId,definitionVersion,
- formulaType,computedAt}
+ formulaType,chapterCode,computedAt}
 ```
 灯号：达标绿、预警线内黄、超阈值红；`value=null` 为 `na`。
 
@@ -86,10 +87,17 @@ type Alert={id,metricCode,metricName,deptCode,period,type,severity,status,detail
 
 ## 6. PDCA 与报告
 
-`POST /api/v3/improvements/from-alert` `{alertId, rootCause, action, owner, dueDate}` → 新建整改（状态 `open`），预警转 `assigned`。
+`POST /api/v3/improvements/from-alert` `{alertId, rootCause, action, owner, dueDate}` → 新建整改（状态 `open`），预警转 `assigned`；自动带入该预警结果值作为基线。
+
+`POST /api/v3/improvements`（review_office）`{sourceType:"result"|"audit_sample"|"task", sourceId, rootCause, action, owner, dueDate}`
+- 预警、条款抽查、任务都可直接建整改；来源类型与来源 ID 记入 `sourceType/sourceId`。
+- `result` 会带入 `baselineValue` 与 `targetValue`；`audit_sample` 带入错误率基线（目标 10%）。
+
+整改对象字段：`sourceType, sourceId, targetValue, baselineValue, latestValue, reviewConclusion, reviewNote, evidenceItemId, closedAt`。
 `GET /api/v3/improvements?status=` / `GET /api/v3/improvements/{id}`
 `POST /api/v3/improvements/{id}/review` `{conclusion:"improved"|"partially_improved"|"not_recovered"|"invalidated", note, evidenceItemId?}`
-- 复核必须有结论；`evidenceItemId` 必须是本院已存在材料（复用 v2 `evidence_item`）。
+- 复核必须有结论**且必须附 `evidenceItemId`**（缺证据 → 400）；材料必须是本院已存在记录（复用 v2 `evidence_item`，可先在 v2 材料库以 `ownerType=improvement` 上传）。
+- 复核写入 `improvement→evidence` 血缘，报告快照列出证据版本与 SHA-256。
 - 完成后状态 `closed`，写入复核结论与时间。
 
 `POST /api/v3/reports` `{versionId, periodFrom:"YYYY-MM", periodTo:"YYYY-MM"}` → 快照 `{id, metricCount, alertCount, improvementCount, createdAt}`
@@ -99,5 +107,5 @@ type Alert={id,metricCode,metricName,deptCode,period,type,severity,status,detail
 ## 7. 不可变与迁移
 
 - 指标定义按版本追加；批次 `applied` 后不可改；结果与报告为快照；审计事件不提供删除。
-- 迁移从版本 4 开始追加：`v2/platform/V4Schema.java` 与 `resources/db/migration/postgresql/V4__v03_data_platform.sql`，不改 v2 表结构与 v1/v2 端点。
+- 迁移从版本 4 开始追加：`V4Schema`（11 张表）与 `V5Schema`（整改表追加 `source_type/source_id/target_value/baseline_value/latest_value` 五列），对应 `V4__*.sql`、`V5__*.sql`；不改 v2 表结构与 v1/v2 端点。
 - 回滚：代码回退到 v3 交付提交；数据层删除 v4 新增表并移除 `schema_migration` 中 version=4 记录，执行前必须备份。

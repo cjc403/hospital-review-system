@@ -2,29 +2,44 @@
 import { computed, onMounted, ref } from "vue";
 import { errorText, v3 } from "./api";
 import { formatValue, formulaLabels, lightBadge, lightLabels, lineagePath } from "./domain";
-import type { V3Definition, V3Drilldown, V3Lineage, V3Result } from "./types";
-import { notify } from "../store";
+import type { V3Alert, V3Definition, V3Drilldown, V3Lineage, V3Result } from "./types";
+import { notify, role } from "../store";
 
 const results = ref<V3Result[]>([]);
 const definitions = ref<V3Definition[]>([]);
 const definitionVersion = ref("");
-const filters = ref({ period: "", metricCode: "", deptCode: "" });
+const filters = ref({ period: "", metricCode: "", deptCode: "", chapterCode: "" });
 const loading = ref(false);
 const error = ref("");
 const selected = ref<V3Result | null>(null);
+const busy = ref(false);
 const drilldown = ref<V3Drilldown | null>(null);
 const lineage = ref<V3Lineage | null>(null);
 const showDefinitions = ref(false);
+const alerts = ref<V3Alert[]>([]);
+const improving = ref(false);
+const improveDraft = ref({ rootCause: "", action: "", owner: "", dueDate: "2026-12-31" });
+const canWrite = computed(() => role.value === "quality");
 
 const metrics = computed(() => {
   const seen = new Map<string, string>();
   for (const definition of definitions.value) seen.set(definition.code, definition.name);
   return [...seen.entries()];
 });
+const chapters = computed(() => {
+  const seen = new Map<string, string>();
+  for (const item of results.value) {
+    if (item.chapterCode && !seen.has(item.chapterCode)) seen.set(item.chapterCode, item.chapterCode);
+  }
+  return [...seen.keys()];
+});
+
 const summary = computed(() => ({
   red: results.value.filter((item) => item.light === "red").length,
   yellow: results.value.filter((item) => item.light === "yellow").length,
   na: results.value.filter((item) => item.light === "na").length,
+  periods: new Set(results.value.map((item) => item.period)).size,
+  openAlerts: alerts.value.filter((alert) => alert.status !== "resolved" && alert.status !== "ignored").length,
 }));
 
 async function loadDefinitions() {
@@ -37,6 +52,36 @@ async function loadDefinitions() {
   }
 }
 
+async function loadAlerts() {
+  try {
+    const result = await v3<{ items: V3Alert[] }>("/alerts?limit=100");
+    alerts.value = result.items;
+  } catch {
+    /* 预警加载失败不影响结果视图 */
+  }
+}
+
+async function createImprovement() {
+  if (!selected.value) return;
+  busy.value = true;
+  try {
+    await v3("/improvements", {
+      method: "POST",
+      body: JSON.stringify({
+        sourceType: "result",
+        sourceId: selected.value.id,
+        ...improveDraft.value,
+      }),
+    });
+    notify("已由该指标结果创建整改项目");
+    improving.value = false;
+  } catch (e) {
+    notify(errorText(e), true);
+  } finally {
+    busy.value = false;
+  }
+}
+
 async function loadResults() {
   loading.value = true;
   error.value = "";
@@ -45,6 +90,7 @@ async function loadResults() {
     if (filters.value.period) query.set("period", filters.value.period);
     if (filters.value.metricCode) query.set("metricCode", filters.value.metricCode);
     if (filters.value.deptCode) query.set("deptCode", filters.value.deptCode);
+    if (filters.value.chapterCode) query.set("chapterCode", filters.value.chapterCode);
     query.set("limit", "100");
     const result = await v3<{ items: V3Result[] }>(`/metric-results?${query.toString()}`);
     results.value = result.items;
@@ -74,7 +120,7 @@ async function openResult(result: V3Result) {
 
 onMounted(async () => {
   await loadDefinitions();
-  await loadResults();
+  await Promise.all([loadResults(), loadAlerts()]);
 });
 </script>
 
@@ -102,9 +148,9 @@ onMounted(async () => {
         <span class="metric-foot">预警区间</span>
       </div>
       <div class="metric-card">
-        <span class="metric-label">无数据</span>
-        <strong class="metric-number">{{ summary.na }}</strong>
-        <span class="metric-foot">缺失或不适用</span>
+        <span class="metric-label">覆盖周期 / 待办预警</span>
+        <strong class="metric-number">{{ summary.periods }} / {{ summary.openAlerts }}</strong>
+        <span class="metric-foot">无数据 {{ summary.na }} 条；预警含未确认与整改中</span>
       </div>
     </section>
 
@@ -126,6 +172,10 @@ onMounted(async () => {
             <option value="ORTH">骨科</option>
             <option value="RESP">呼吸内科</option>
             <option value="GYNE">妇产科</option>
+          </select>
+          <select v-model="filters.chapterCode" aria-label="章节">
+            <option value="">全部章节</option>
+            <option v-for="code in chapters" :key="code" :value="code">{{ code }}</option>
           </select>
           <button class="button-small" :disabled="loading" @click="loadResults">查询</button>
           <button class="button-small" @click="showDefinitions = !showDefinitions">
@@ -229,6 +279,20 @@ onMounted(async () => {
       <p class="hint">
         成员明细：{{ drilldown.members.masked ? "脱敏占位（患者级明细需真实接入后按授权开列）" : "已开放" }}
       </p>
+      <div v-if="canWrite" class="inline-filters">
+        <button class="button-small" @click="improving = !improving">
+          {{ improving ? "取消建整改" : "由该结果建整改" }}
+        </button>
+      </div>
+      <div v-if="improving" class="form-grid">
+        <label class="field"><span>根因</span><input v-model="improveDraft.rootCause" /></label>
+        <label class="field"><span>措施</span><input v-model="improveDraft.action" /></label>
+        <label class="field"><span>负责人</span><input v-model="improveDraft.owner" /></label>
+        <label class="field"><span>截止</span><input v-model="improveDraft.dueDate" /></label>
+      </div>
+      <div v-if="improving" class="form-actions">
+        <button class="button primary" :disabled="busy" @click="createImprovement">创建整改</button>
+      </div>
       <div v-if="lineage" class="info-strip">
         <strong>血缘：</strong>{{ lineagePath(lineage.nodes) }}
         <div class="hint">节点 {{ lineage.nodes.length }} 个，边 {{ lineage.edges.length }} 条</div>

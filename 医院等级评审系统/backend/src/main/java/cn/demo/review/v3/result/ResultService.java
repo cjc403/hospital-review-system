@@ -18,34 +18,42 @@ public class ResultService {
     public ResultService(JdbcTemplate jdbc) { this.jdbc = jdbc; }
 
     public Map<String, Object> list(AuthContext ctx, String metricCode, String period, String deptCode,
-                                    String versionId, int limit) {
+                                    String versionId, String chapterCode, int limit) {
         StringBuilder sql = new StringBuilder(
-                "SELECT id, metric_code, metric_name, unit, direction, period_code, dept_code, metric_value,"
-                        + " numerator, denominator, light, target_value, warning_value, reason_code, quality_status,"
-                        + " batch_id, definition_id, definition_version, formula_type, computed_at"
-                        + " FROM metric_result WHERE hospital_id=?");
+                "SELECT r.id, r.metric_code, r.metric_name, r.unit, r.direction, r.period_code, r.dept_code,"
+                        + " r.metric_value, r.numerator, r.denominator, r.light, r.target_value, r.warning_value,"
+                        + " r.reason_code, r.quality_status, r.batch_id, r.definition_id, r.definition_version,"
+                        + " r.formula_type, r.computed_at, d.chapter_code"
+                        + " FROM metric_result r"
+                        + " LEFT JOIN metric_definition m ON m.id=r.definition_id"
+                        + " LEFT JOIN indicator_definition d ON d.version_id=m.standard_version_id AND d.code=m.code"
+                        + " WHERE r.hospital_id=?");
         List<Object> args = new ArrayList<>();
         args.add(ctx.hospitalId());
         if (ctx.deptCode() != null) {
-            sql.append(" AND dept_code=?");
+            sql.append(" AND r.dept_code=?");
             args.add(ctx.deptCode());
         } else if (deptCode != null && !deptCode.isBlank()) {
-            sql.append(" AND dept_code=?");
+            sql.append(" AND r.dept_code=?");
             args.add(deptCode);
         }
         if (metricCode != null && !metricCode.isBlank()) {
-            sql.append(" AND metric_code=?");
+            sql.append(" AND r.metric_code=?");
             args.add(metricCode);
         }
         if (period != null && !period.isBlank()) {
-            sql.append(" AND period_code=?");
+            sql.append(" AND r.period_code=?");
             args.add(period);
         }
         if (versionId != null && !versionId.isBlank()) {
-            sql.append(" AND standard_version_id=?");
+            sql.append(" AND r.standard_version_id=?");
             args.add(versionId);
         }
-        sql.append(" ORDER BY period_code DESC, metric_code, dept_code LIMIT ?");
+        if (chapterCode != null && !chapterCode.isBlank()) {
+            sql.append(" AND d.chapter_code=?");
+            args.add(chapterCode);
+        }
+        sql.append(" ORDER BY r.period_code DESC, r.metric_code, r.dept_code LIMIT ?");
         args.add(Math.min(Math.max(limit, 1), 200));
         List<Map<String, Object>> items = jdbc.query(sql.toString(), (rs, i) -> row(rs), args.toArray());
         return Map.of("items", items);
@@ -99,18 +107,25 @@ public class ResultService {
             node(nodes, "batch", batchId, "采集批次");
             edge(edges, "batch", batchId, "result", resultId, "produces");
             List<Map<String, Object>> sources = jdbc.query(
-                    "SELECT s.id, s.code, s.name FROM ingestion_batch b JOIN data_source s ON s.id=b.source_id"
-                            + " WHERE b.id=?", (rs, i) -> {
+                    "SELECT s.id, s.code, s.name, b.mapping_version, b.created_by FROM ingestion_batch b"
+                            + " JOIN data_source s ON s.id=b.source_id WHERE b.id=?", (rs, i) -> {
                         Map<String, Object> m = new LinkedHashMap<>();
                         m.put("id", rs.getString("id"));
                         m.put("code", rs.getString("code"));
                         m.put("name", rs.getString("name"));
+                        m.put("mappingVersion", rs.getInt("mapping_version"));
+                        m.put("createdBy", rs.getString("created_by"));
                         return m;
                     }, batchId);
             if (!sources.isEmpty()) {
                 Map<String, Object> source = sources.get(0);
                 node(nodes, "source", (String) source.get("id"), source.get("name") + "（" + source.get("code") + "）");
                 edge(edges, "source", (String) source.get("id"), "batch", batchId, "feeds");
+                node(nodes, "mapping", batchId + "-mapping",
+                        "字段映射 v" + source.get("mappingVersion"));
+                edge(edges, "mapping", batchId + "-mapping", "batch", batchId, "cleans");
+                node(nodes, "operator", String.valueOf(source.get("createdBy")), "操作者 " + source.get("createdBy"));
+                edge(edges, "operator", String.valueOf(source.get("createdBy")), "batch", batchId, "creates");
             }
             Integer facts = jdbc.queryForObject("SELECT COUNT(*) FROM canonical_fact WHERE batch_id=?",
                     Integer.class, batchId);
@@ -172,6 +187,11 @@ public class ResultService {
         m.put("definitionVersion", rs.getInt("definition_version"));
         m.put("formulaType", rs.getString("formula_type"));
         m.put("computedAt", rs.getString("computed_at"));
+        try {
+            m.put("chapterCode", rs.getString("chapter_code"));
+        } catch (java.sql.SQLException ignored) {
+            m.put("chapterCode", null);
+        }
         return m;
     }
 

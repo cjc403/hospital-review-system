@@ -80,6 +80,7 @@ export interface V3Result {
   definitionId: string | null;
   definitionVersion: number;
   formulaType: string;
+  chapterCode: string | null;
   computedAt: string;
 }
 
@@ -131,6 +132,11 @@ export interface V3Improvement {
   reviewNote: string | null;
   evidenceItemId: string | null;
   closedAt: string | null;
+  sourceType: string | null;
+  sourceId: string | null;
+  targetValue: number | null;
+  baselineValue: number | null;
+  latestValue: number | null;
   createdAt: string;
 }
 
