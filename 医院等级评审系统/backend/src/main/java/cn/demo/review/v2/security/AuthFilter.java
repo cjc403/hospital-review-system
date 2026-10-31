@@ -37,7 +37,9 @@ public class AuthFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
-        return path == null || !path.startsWith("/api/v2");
+        if (path == null) return true;
+        // v2 与 v3 共用同一套认证与租户上下文；v1 保持原有演示契约不动。
+        return !path.startsWith("/api/v2") && !path.startsWith("/api/v3");
     }
 
     @Override

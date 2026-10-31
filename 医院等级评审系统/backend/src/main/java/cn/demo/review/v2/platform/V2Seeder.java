@@ -21,6 +21,7 @@ import java.util.Set;
  * 只在 demo profile 执行；prod profile 不写入任何合成数据。
  */
 @Component
+@org.springframework.core.annotation.Order(10)
 public class V2Seeder implements ApplicationRunner {
     private static final Logger log = LoggerFactory.getLogger(V2Seeder.class);
 

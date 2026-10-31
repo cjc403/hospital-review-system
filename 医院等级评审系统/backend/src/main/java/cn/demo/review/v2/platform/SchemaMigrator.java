@@ -26,6 +26,7 @@ public class SchemaMigrator implements InitializingBean {
         jdbc.execute("CREATE TABLE IF NOT EXISTS schema_migration (version INT PRIMARY KEY, applied_at VARCHAR(40) NOT NULL)");
         apply(V2Schema.VERSION, V2Schema.DDL);
         apply(V3Schema.VERSION, V3Schema.DDL);
+        apply(V4Schema.VERSION, V4Schema.DDL);
     }
 
     private void apply(int version, String[] ddl) {

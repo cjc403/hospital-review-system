@@ -19,6 +19,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   FolderTree,
+  Network,
   X,
   CheckCircle2,
   AlertCircle,
@@ -45,6 +46,7 @@ import ImprovementsView from "./components/ImprovementsView.vue";
 import PoliciesView from "./components/PoliciesView.vue";
 import OperationsView from "./components/OperationsView.vue";
 import ReviewWorkbench from "./v2/ReviewWorkbench.vue";
+import V3Workbench from "./v3/V3Workbench.vue";
 const pages = [
   {
     id: "dashboard",
@@ -80,6 +82,13 @@ const pages = [
     icon: FolderTree,
     component: ReviewWorkbench,
     group: "v0.2 作业中心",
+  },
+  {
+    id: "v3",
+    name: "v3 数据中台",
+    icon: Network,
+    component: V3Workbench,
+    group: "v3 数据中台",
   },
   {
     id: "prerequisites",

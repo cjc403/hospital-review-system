@@ -28,14 +28,17 @@ class SchemaMigrationTest {
                 "--demo.upload-dir=" + root.resolve("uploads"),
                 "--spring.main.banner-mode=off")) {
             SchemaMigrator migrator = context.getBean(SchemaMigrator.class);
-            assertEquals(List.of(2, 3), migrator.appliedVersions(), "迁移应按版本递增且只应用一次");
+            assertEquals(List.of(2, 3, 4), migrator.appliedVersions(), "迁移应按版本递增且只应用一次");
 
             JdbcTemplate jdbc = context.getBean(JdbcTemplate.class);
             for (String table : List.of("HOSPITAL", "DEPARTMENT", "STANDARD_PACKAGE", "STANDARD_VERSION",
                     "STANDARD_CHAPTER", "STANDARD_CLAUSE", "INDICATOR_DEFINITION", "PREREQ_DEFINITION",
                     "REVIEW_TASK", "ASSIGNMENT_REQUEST", "EVIDENCE_ITEM", "EVIDENCE_VERSION", "DATA_SOURCE",
                     "COLLECTION_BATCH", "METRIC_FACT", "CALCULATION_TRACE", "QUALITY_ISSUE", "SCORE_RUN",
-                    "SCORE_ITEM", "AUDIT_EVENT", "PREREQ_CONCLUSION", "AUDIT_SAMPLE")) {
+                    "SCORE_ITEM", "AUDIT_EVENT", "PREREQ_CONCLUSION", "AUDIT_SAMPLE",
+                    "METRIC_DEFINITION", "SOURCE_MAPPING", "INGESTION_BATCH", "CANONICAL_FACT",
+                    "V3_QUALITY_ISSUE", "V3_TRACE", "LINEAGE_EDGE", "METRIC_RESULT", "V3_ALERT",
+                    "V3_IMPROVEMENT", "V3_REPORT")) {
                 Integer count = jdbc.queryForObject(
                         "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME=?", Integer.class, table);
                 assertEquals(1, count, "缺少表 " + table);

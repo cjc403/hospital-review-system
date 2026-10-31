@@ -267,6 +267,112 @@ try {
   assert.ok(audit.items.every(item => item.requestId), 'audit must carry request id');
   passed('v2 audit trail with request correlation id');
 
+
+  // ---------- v3 数据中台链路 ----------
+  async function v3request(path, { method = 'GET', body, role = 'quality', expected = 200 } = {}) {
+    const response = await fetch(base + '/api/v3' + path, {
+      method,
+      headers: { ...(role ? { 'X-Demo-Role': role } : {}), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    const payload = await response.json().catch(() => ({}));
+    assert.equal(response.status, expected, `v3 ${method} ${path}: ${JSON.stringify(payload)}`);
+    return payload;
+  }
+
+  const v3Defs = await v3request('/metric-definitions');
+  assert.equal(v3Defs.items.length, 14);
+  const v3Version = v3Defs.versionId;
+  const i11Def = v3Defs.items.find(item => item.code === 'i11');
+  assert.equal(i11Def.formulaType, 'drg_formula', 'i11 必须是受控 DRG 公式');
+  passed('v3 metric definitions are versioned with controlled formulas');
+
+  const v3Bad = await v3request('/ingestion/batches', {
+    method: 'POST',
+    body: { sourceCode: 'CSV-IMPORT', period: '2026-10', rows: [
+      { code: 'i01', dept: 'CARD', num: 3000, den: 2000, unit: '%' },
+      { code: 'unknown', dept: 'CARD', num: 1, den: 2, unit: '%' },
+    ] },
+  });
+  assert.equal(v3Bad.batch.status, 'rejected');
+  assert.ok(v3Bad.issues.every(issue => issue.rowNo > 0));
+  await v3request(`/ingestion/batches/${v3Bad.batch.id}/apply`, { method: 'POST', body: {}, expected: 409 });
+  const v3Replay = await v3request(`/ingestion/batches/${v3Bad.batch.id}/replay`, { method: 'POST', body: {} });
+  assert.equal(v3Replay.batch.replayOf, v3Bad.batch.id);
+  passed('v3 quality gate blocks bad batch, issues are line-locatable, replay creates new batch');
+
+  const v3Good = await v3request('/ingestion/batches', {
+    method: 'POST',
+    body: { sourceCode: 'CSV-IMPORT', period: '2026-10', rows: [
+      { code: 'i01', dept: 'CARD', num: 11, den: 2000, unit: '%' },
+      { code: 'i11', dept: 'CARD', num: 400, den: 100, unit: '' },
+      { code: 'i11', dept: 'SURG', num: 600, den: 300, unit: '' },
+      { code: 'i12', dept: 'ALL', val: 860, unit: '张' },
+    ] },
+  });
+  assert.equal(v3Good.batch.status, 'validated');
+  await v3request(`/ingestion/batches/${v3Good.batch.id}/apply`, { method: 'POST', body: {} });
+  const v3Results = await v3request('/metric-results?period=2026-10');
+  const v3I11 = v3Results.items.find(item => item.metricCode === 'i11' && item.deptCode === 'ALL');
+  assert.equal(v3I11.value, 2.5, 'DRG 必须按 Σ分子/Σ分母 聚合，不得退化为平均');
+  assert.equal(v3I11.numerator, 1000);
+  assert.equal(v3I11.denominator, 400);
+  const v3I12 = v3Results.items.find(item => item.metricCode === 'i12' && item.deptCode === 'ALL');
+  assert.equal(v3I12.value, 860, '年末快照取原值');
+  passed('v3 batch applies, i11 weighted aggregation and i12 snapshot verified');
+
+  const v3Lineage = await v3request(`/lineage/results/${v3I11.id}`);
+  const v3Types = v3Lineage.nodes.map(node => node.type);
+  assert.ok(v3Types.includes('source') && v3Types.includes('batch') && v3Types.includes('definition'));
+  const v3Drill = await v3request(`/metric-results/${v3I11.id}/drilldown`);
+  assert.ok(v3Drill.departments.length >= 2);
+  assert.equal(v3Drill.members.masked, true);
+  await v3request('/metric-results?period=2026-10', { role: 'department' }).then(scoped => {
+    assert.ok(scoped.items.every(item => item.deptCode === 'CARD'), '科室角色只能看到本科室结果');
+  });
+  passed('v3 drilldown masked, lineage traceable, department scope enforced');
+
+  const v3Open = await v3request('/alerts?status=open');
+  const v3Alert = v3Open.items.find(item => item.deptCode === 'CARD') || v3Open.items[0];
+  assert.ok(v3Alert, 'applying a red result must raise an alert');
+  await v3request(`/alerts/${v3Alert.id}/ack`, { method: 'POST', body: { note: '集成检查确认' } });
+  await v3request(`/alerts/${v3Alert.id}/resolve`, { method: 'POST', body: { note: '跳过分派' }, expected: 409 });
+  await v3request(`/alerts/${v3Alert.id}/assign`, { method: 'POST', body: { assignee: '科室质控员', dueDate: '2026-12-31' } });
+  await v3request(`/alerts/${v3Alert.id}/resolve`, { method: 'POST', body: { note: '集成检查关闭' } });
+  passed('v3 alert state machine rejects invalid transitions and records transitions');
+
+  const v3Improvement = await v3request('/improvements/from-alert', {
+    method: 'POST',
+    body: { alertId: v3Alert.id, rootCause: '围手术期评估不足', action: '补充术前讨论', owner: '心血管内科', dueDate: '2026-12-31' },
+  });
+  await v3request(`/improvements/${v3Improvement.id}/review`, {
+    method: 'POST',
+    body: { conclusion: 'whatever', note: '乱填' },
+    expected: 400,
+  });
+  const v3Closed = await v3request(`/improvements/${v3Improvement.id}/review`, {
+    method: 'POST',
+    body: { conclusion: 'partially_improved', note: '已落实术前讨论' },
+  });
+  assert.equal(v3Closed.status, 'closed');
+  await v3request(`/improvements/${v3Improvement.id}/review`, { method: 'POST', body: { conclusion: 'improved', note: '重复' }, expected: 409 });
+  passed('v3 PDCA improvement closes only with a valid review conclusion');
+
+  const v3Report = await v3request('/reports', {
+    method: 'POST',
+    body: { versionId: v3Version, periodFrom: '2026-09', periodTo: '2026-10' },
+  });
+  assert.ok(v3Report.metricCount > 0);
+  assert.ok(v3Report.batchIds.length > 0);
+  const v3DocResponse = await fetch(base + `/api/v3/reports/${v3Report.id}/document`, { headers: { 'X-Demo-Role': 'quality' } });
+  assert.equal(v3DocResponse.status, 200);
+  const v3Doc = Buffer.from(await v3DocResponse.arrayBuffer());
+  assert.equal(v3Doc.subarray(0, 2).toString(), 'PK');
+  assert.ok(v3Doc.includes(Buffer.from('word/document.xml')));
+  const v3DocAgain = await fetch(base + `/api/v3/reports/${v3Report.id}/document`, { headers: { 'X-Demo-Role': 'quality' } });
+  assert.ok(Buffer.from(await v3DocAgain.arrayBuffer()).equals(v3Doc), 'v3 报告必须字节稳定');
+  passed('v3 report snapshot is stable and lists referenced batches');
+
   console.log(`Integration checks passed: ${checks}. DOCX snapshot files: ${output}`);
 } finally {
   await request('/demo/reset', { method: 'POST', body: { confirm: 'RESET_DEMO' } });
