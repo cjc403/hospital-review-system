@@ -21,6 +21,7 @@ public class ResultService {
                                     String versionId, String chapterCode, int limit) {
         StringBuilder sql = new StringBuilder(
                 "SELECT r.id, r.metric_code, r.metric_name, r.unit, r.direction, r.period_code, r.dept_code,"
+                        + " r.standard_version_id,"
                         + " r.metric_value, r.numerator, r.denominator, r.light, r.target_value, r.warning_value,"
                         + " r.reason_code, r.quality_status, r.batch_id, r.definition_id, r.definition_version,"
                         + " r.formula_type, r.computed_at, d.chapter_code"
@@ -67,7 +68,8 @@ public class ResultService {
         Map<String, Object> result = resultRow(ctx, id);
         List<Map<String, Object>> departments = jdbc.query(
                 "SELECT dept_code, metric_value, numerator, denominator, light FROM metric_result"
-                        + " WHERE hospital_id=? AND metric_code=? AND period_code=? AND dept_code<>'ALL' ORDER BY dept_code",
+                        + " WHERE hospital_id=? AND standard_version_id=? AND metric_code=? AND period_code=?"
+                        + " AND dept_code<>'ALL' AND (? IS NULL OR dept_code=?) ORDER BY dept_code",
                 (rs, i) -> {
                     Map<String, Object> m = new LinkedHashMap<>();
                     m.put("deptCode", rs.getString("dept_code"));
@@ -76,12 +78,28 @@ public class ResultService {
                     m.put("denominator", rs.getObject("denominator"));
                     m.put("light", rs.getString("light"));
                     return m;
-                }, ctx.hospitalId(), result.get("metricCode"), result.get("period"));
+                }, ctx.hospitalId(), result.get("versionId"), result.get("metricCode"), result.get("period"), ctx.deptCode(), ctx.deptCode());
         Map<String, Object> members = new LinkedHashMap<>();
         members.put("masked", true);
         members.put("items", List.of());
+        Object denominator = result.get("denominator");
         if (ctx.has("review_office") || ctx.has("indicator_admin")) {
-            members.put("note", "v3 只提供科室级下钻；患者级明细需在真实接入后按授权开列，本演示不生成真实病例");
+            int total = denominator instanceof Number number ? Math.max(0, number.intValue()) : 0;
+            int sampleSize = Math.min(total, 20);
+            List<Map<String, Object>> items = new ArrayList<>();
+            String dept = String.valueOf(result.get("deptCode"));
+            String period = String.valueOf(result.get("period"));
+            for (int index = 1; index <= sampleSize; index++) {
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("inpatientNo", "DEMO-" + dept + "-****" + String.format("%05d", index));
+                item.put("dischargeDate", period + "-" + String.format("%02d", 1 + (index * 3) % 28));
+                item.put("deptCode", dept);
+                item.put("memberRole", "denominator");
+                items.add(item);
+            }
+            members.put("items", items);
+            members.put("total", total);
+            members.put("note", "仅返回合成脱敏成员样本；真实接入后仍需按授权和数据源范围提供明细");
         }
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("result", result);
@@ -153,7 +171,7 @@ public class ResultService {
     private Map<String, Object> resultRow(AuthContext ctx, String id) {
         List<Map<String, Object>> rows = jdbc.query(
                 "SELECT id, metric_code, metric_name, unit, direction, period_code, dept_code, metric_value,"
-                        + " numerator, denominator, light, target_value, warning_value, reason_code, quality_status,"
+                        + " standard_version_id, numerator, denominator, light, target_value, warning_value, reason_code, quality_status,"
                         + " batch_id, definition_id, definition_version, formula_type, computed_at"
                         + " FROM metric_result WHERE id=? AND hospital_id=?",
                 (rs, i) -> row(rs), id, ctx.hospitalId());
@@ -174,6 +192,7 @@ public class ResultService {
         m.put("direction", rs.getString("direction"));
         m.put("period", rs.getString("period_code"));
         m.put("deptCode", rs.getString("dept_code"));
+        m.put("versionId", rs.getString("standard_version_id"));
         m.put("value", rs.getObject("metric_value"));
         m.put("numerator", rs.getObject("numerator"));
         m.put("denominator", rs.getObject("denominator"));

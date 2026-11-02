@@ -3,12 +3,12 @@ import { computed, onMounted, ref } from "vue";
 import { errorText, v3 } from "./api";
 import { formatValue, formulaLabels, lightBadge, lightLabels, lineagePath } from "./domain";
 import type { V3Alert, V3Definition, V3Drilldown, V3Lineage, V3Result } from "./types";
-import { notify, role } from "../store";
+import { notify, role, workspace } from "../store";
 
 const results = ref<V3Result[]>([]);
 const definitions = ref<V3Definition[]>([]);
 const definitionVersion = ref("");
-const filters = ref({ period: "", metricCode: "", deptCode: "", chapterCode: "" });
+const filters = ref({ period: workspace.value?.meta.period || "2026-09", metricCode: "", deptCode: "", chapterCode: "" });
 const loading = ref(false);
 const error = ref("");
 const selected = ref<V3Result | null>(null);
@@ -26,13 +26,7 @@ const metrics = computed(() => {
   for (const definition of definitions.value) seen.set(definition.code, definition.name);
   return [...seen.entries()];
 });
-const chapters = computed(() => {
-  const seen = new Map<string, string>();
-  for (const item of results.value) {
-    if (item.chapterCode && !seen.has(item.chapterCode)) seen.set(item.chapterCode, item.chapterCode);
-  }
-  return [...seen.keys()];
-});
+const chapters = ["CH1", "CH2", "CH3", "CH4", "CH5"];
 
 const summary = computed(() => ({
   red: results.value.filter((item) => item.light === "red").length,
@@ -91,7 +85,7 @@ async function loadResults() {
     if (filters.value.metricCode) query.set("metricCode", filters.value.metricCode);
     if (filters.value.deptCode) query.set("deptCode", filters.value.deptCode);
     if (filters.value.chapterCode) query.set("chapterCode", filters.value.chapterCode);
-    query.set("limit", "100");
+    query.set("limit", "200");
     const result = await v3<{ items: V3Result[] }>(`/metric-results?${query.toString()}`);
     results.value = result.items;
     selected.value = null;
@@ -209,7 +203,7 @@ onMounted(async () => {
         </table>
       </div>
 
-      <div class="table-wrap">
+      <div class="table-wrap results-scroll">
         <table>
           <thead>
             <tr>
@@ -277,8 +271,18 @@ onMounted(async () => {
         </table>
       </div>
       <p class="hint">
-        成员明细：{{ drilldown.members.masked ? "脱敏占位（患者级明细需真实接入后按授权开列）" : "已开放" }}
+        {{ drilldown.members.note || "当前角色不展示合成成员样本" }}
       </p>
+      <div v-if="drilldown.members.items.length" class="table-wrap results-scroll">
+        <table>
+          <thead><tr><th>合成标识</th><th>归期日期</th><th>科室</th><th>样本角色</th></tr></thead>
+          <tbody><tr v-for="member in drilldown.members.items" :key="member.inpatientNo">
+            <td>{{ member.inpatientNo }}</td><td>{{ member.dischargeDate }}</td>
+            <td>{{ member.deptCode }}</td><td>分母成员样本</td>
+          </tr></tbody>
+        </table>
+        <p class="hint">共 {{ drilldown.members.total }} 个分母样本，展示最多 20 条；全部为合成数据。</p>
+      </div>
       <div v-if="canWrite" class="inline-filters">
         <button class="button-small" @click="improving = !improving">
           {{ improving ? "取消建整改" : "由该结果建整改" }}
@@ -311,4 +315,5 @@ onMounted(async () => {
   border-bottom: 1px solid var(--border);
   margin-bottom: 8px;
 }
+.results-scroll { max-height: 520px; overflow: auto; }
 </style>

@@ -2,7 +2,7 @@
 
 > 前缀 `/api/v3`。v1、v2 端点与响应形状保持不变；v3 只做新增。
 > 当前只使用虚构医院与合成数据，本地模拟服务验证。认证、租户与科室范围复用 v2（`AuthFilter`）。
-> 验证状态（2026-10-31）：后端 78 项测试、前端 36 项、集成检查 24 组（含 v3 七组）、真实 PostgreSQL 迁移到版本 4 与备份恢复均通过。**真实接入未验证。**
+> 验证状态（2026-10-31）：后端 83 项测试、前端 36 项、隔离集成检查 25 组（含 v3 八组）、PostgreSQL 迁移脚本已追加到版本 6；已人工走查 v3 四个页签和科室范围。**真实接入、性能和完整业务浏览器走查未验证。**
 
 ## 1. 基础
 
@@ -104,8 +104,13 @@ type Alert={id,metricCode,metricName,deptCode,period,type,severity,status,detail
 `GET /api/v3/reports/{id}` → 元数据 + 引用清单（批次、定义版本、预警、整改、材料版本）
 `GET /api/v3/reports/{id}/document` → DOCX（引用快照生成，后续数据变化不改写）
 
+院级报告包含全院快照，科室范围账号查询列表返回空列表，详情与下载返回 403；不能用报告绕过科室隔离。
+
 ## 7. 不可变与迁移
 
+- 演示数据升级追加 V7 场景标记、V8 报告快照容量迁移。报告保存完整结果与证据版本，最大 4,000,000 字符；超过容量明确报错，不截断。种子开关 `demo.rich-seed.enabled`（demo 默认为 true，测试显式关闭）；prod 始终禁止种子。现有端点与字段形状不变。
+- 下钻的 `departments` 同样受服务端科室范围约束；科室负责人只能看到本科室分布。`members.items` 为最多 20 条合成脱敏样本（原有 `inpatientNo/dischargeDate/deptCode/memberRole` 字段），仅授权评审/指标管理员返回，不能当作真实患者清单。
+
 - 指标定义按版本追加；批次 `applied` 后不可改；结果与报告为快照；审计事件不提供删除。
-- 迁移从版本 4 开始追加：`V4Schema`（11 张表）与 `V5Schema`（整改表追加 `source_type/source_id/target_value/baseline_value/latest_value` 五列），对应 `V4__*.sql`、`V5__*.sql`；不改 v2 表结构与 v1/v2 端点。
+- 迁移从版本 4 开始追加：`V4Schema`（11 张表）、`V5Schema`（整改表追加 `source_type/source_id/target_value/baseline_value/latest_value` 五列）和 `V6Schema`（`source_mapping_history` 映射历史表），对应 `V4__*.sql`、`V5__*.sql`、`V6__*.sql`；不改 v2 表结构与 v1/v2 端点。批次重放按批次记录的 `mappingVersion` 读取历史映射，不能被当前映射覆盖。
 - 回滚：代码回退到 v3 交付提交；数据层删除 v4 新增表并移除 `schema_migration` 中 version=4 记录，执行前必须备份。

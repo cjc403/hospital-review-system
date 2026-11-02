@@ -93,7 +93,7 @@ export interface V3Drilldown {
     denominator: number | null;
     light: string;
   }[];
-  members: { masked: boolean; items: unknown[]; note?: string };
+  members: { masked: boolean; items: { inpatientNo: string; dischargeDate: string; deptCode: string; memberRole: string }[]; total?: number; note?: string };
 }
 
 export interface V3Lineage {

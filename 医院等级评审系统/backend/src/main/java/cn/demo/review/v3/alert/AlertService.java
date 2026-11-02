@@ -234,7 +234,7 @@ public class AlertService {
         sql.append(" ORDER BY created_at DESC LIMIT 100");
         List<Map<String, Object>> items = jdbc.query(sql.toString(), (rs, i) -> improvementMap(rs), args.toArray());
         if (ctx.deptCode() != null) {
-            items = items.stream().filter(item -> ctx.deptCode().equals(deptOfAlert(ctx, (String) item.get("alertId"))))
+            items = items.stream().filter(item -> ctx.deptCode().equals(improvementDept(ctx, item)))
                     .toList();
         }
         return Map.of("items", items);
@@ -256,8 +256,9 @@ public class AlertService {
             throw V2Exception.badRequest("关闭整改必须附复核证据材料");
         }
         Integer exists = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM evidence_item WHERE id=? AND hospital_id=?",
-                Integer.class, evidenceItemId, ctx.hospitalId());
+                "SELECT COUNT(*) FROM evidence_item WHERE id=? AND hospital_id=?"
+                        + " AND owner_type='improvement' AND owner_id=?",
+                Integer.class, evidenceItemId, ctx.hospitalId(), id);
         if (exists == null || exists == 0) throw V2Exception.badRequest("佐证材料不存在于本院");
         jdbc.update("UPDATE v3_improvement SET status='closed', review_conclusion=?, review_note=?,"
                         + " evidence_item_id=?, closed_at=?, updated_at=? WHERE id=? AND hospital_id=?",
@@ -289,7 +290,11 @@ public class AlertService {
                         + " FROM v3_improvement WHERE id=? AND hospital_id=?",
                 (rs, i) -> improvementMap(rs), id, ctx.hospitalId());
         if (rows.isEmpty()) throw V2Exception.notFound("整改不存在或不在可见范围");
-        return rows.get(0);
+        Map<String, Object> result = rows.get(0);
+        if (ctx.deptCode() != null && !ctx.deptCode().equals(improvementDept(ctx, result))) {
+            throw V2Exception.notFound("整改不存在或不在可见范围");
+        }
+        return result;
     }
 
     private String deptOfAlert(AuthContext ctx, String alertId) {
@@ -297,6 +302,26 @@ public class AlertService {
         List<String> depts = jdbc.query("SELECT dept_code FROM v3_alert WHERE id=? AND hospital_id=?",
                 (rs, i) -> rs.getString(1), alertId, ctx.hospitalId());
         return depts.isEmpty() ? null : depts.get(0);
+    }
+
+    private String improvementDept(AuthContext ctx, Map<String, Object> improvement) {
+        String alertId = (String) improvement.get("alertId");
+        String alertDept = deptOfAlert(ctx, alertId);
+        if (alertDept != null) return alertDept;
+        String sourceType = (String) improvement.get("sourceType");
+        String sourceId = (String) improvement.get("sourceId");
+        if (sourceId == null || sourceType == null) return null;
+        if ("result".equals(sourceType)) {
+            List<String> depts = jdbc.query("SELECT dept_code FROM metric_result WHERE id=? AND hospital_id=?",
+                    (rs, i) -> rs.getString(1), sourceId, ctx.hospitalId());
+            return depts.isEmpty() ? null : depts.get(0);
+        }
+        if ("task".equals(sourceType)) {
+            List<String> depts = jdbc.query("SELECT dept_code FROM review_task WHERE id=? AND hospital_id=?",
+                    (rs, i) -> rs.getString(1), sourceId, ctx.hospitalId());
+            return depts.isEmpty() ? null : depts.get(0);
+        }
+        return null;
     }
 
     private static Map<String, Object> alertRow(java.sql.ResultSet rs) throws java.sql.SQLException {

@@ -24,6 +24,8 @@
 
 ## 推荐演示路线
 
+组会使用的丰富场景、当前数据规模与跨 v1/v2/v3 讲解路线见 [演示数据指南](docs/demo-data-guide.md)。启动时自动补齐场景，保留旧批次、附件与报告；无需重置运行库。
+
 1. 在总览查看灯号分布、章节表现、趋势和待办。
 2. 进入指标监测，筛选红灯，打开指标详情，查看公式、科室分布与脱敏分子/分母成员。
 3. 在补录审核提交补录并审核，返回指标观察人工覆盖标记。自动值仍保留。
@@ -36,7 +38,7 @@
 
 ## 开发与验证
 
-在工程目录运行 `powershell -ExecutionPolicy Bypass -File scripts/verify.ps1` 可依次完成后端测试与打包、前端测试与构建、演示服务器测试。已有服务运行时，请先停止服务再打包，避免 Windows 锁定 JAR。
+在工程目录运行 `powershell -ExecutionPolicy Bypass -File scripts/verify.ps1` 可依次完成后端测试与打包、前端测试与构建、演示服务器测试和隔离集成检查。集成检查会使用临时 H2、临时附件目录和随机端口，不污染当前演示库。已有服务运行时，请先停止服务再打包，避免 Windows 锁定 JAR。
 
 ```powershell
 # 后端，在工程 backend/ 内
@@ -53,8 +55,8 @@ npm.cmd run dev
 # 轻量演示服务器测试，在工程目录内
 node --test scripts/serve-demo.test.mjs
 
-# 完整服务启动后运行，测试会写入并最终重置演示数据
-node scripts/integration-check.mjs
+# 使用临时数据库与随机端口完成集成，不写当前演示库
+node scripts/integration-check-isolated.mjs
 ```
 
 集成检查生成的前后两份Word报告位于 `.runtime/qa-report-before.docx` 和 `.runtime/qa-report-after.docx`，用于验证后续业务修改不会改变旧报告的数字。

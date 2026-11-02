@@ -28,6 +28,19 @@ import static org.junit.jupiter.api.Assertions.*;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class V3ApiTest {
+    @Test @Order(17)
+    void departmentCannotDownloadHospitalWideSnapshotReports() throws Exception {
+        assertTrue(ok("GET", "/reports", null, "department").path("items").isEmpty());
+        error(403, "GET", "/reports/" + reportId, null, "department");
+        assertEquals(403, call("GET", "/reports/" + reportId + "/document", null, "department").statusCode());
+    }
+    @Test @Order(16)
+    void departmentDrilldownDoesNotExposeOtherDepartmentDistributions() throws Exception {
+        var items = ok("GET", "/metric-results?period=2026-11", null, "department").path("items");
+        assertFalse(items.isEmpty());
+        var drill = ok("GET", "/metric-results/" + items.get(0).path("id").asText() + "/drilldown", null, "department");
+        for (var dept : drill.path("departments")) assertEquals("CARD", dept.path("deptCode").asText());
+    }
     ConfigurableApplicationContext context;
     ConfigurableApplicationContext prodContext;
     final HttpClient client = HttpClient.newHttpClient();
@@ -45,7 +58,7 @@ class V3ApiTest {
     void start() throws Exception {
         root = Files.createTempDirectory("hospital-v3-");
         context = new SpringApplicationBuilder(DemoApplication.class).run(
-                "--server.port=0",
+                "--server.port=0", "--demo.rich-seed.enabled=false",
                 "--spring.datasource.url=jdbc:h2:file:" + root.resolve("v3state").toString().replace('\\', '/')
                         + ";DB_CLOSE_ON_EXIT=FALSE",
                 "--review.storage-dir=" + root.resolve("v3-evidence"),
@@ -53,7 +66,7 @@ class V3ApiTest {
                 "--spring.main.banner-mode=off");
         base = "http://127.0.0.1:" + context.getEnvironment().getProperty("local.server.port") + "/api/v3";
         prodContext = new SpringApplicationBuilder(DemoApplication.class).run(
-                "--server.port=0",
+                "--server.port=0", "--demo.rich-seed.enabled=false",
                 "--review.profile=prod",
                 "--spring.datasource.url=jdbc:h2:mem:v3prod;DB_CLOSE_DELAY=-1",
                 "--review.storage-dir=" + root.resolve("prod-evidence"),
@@ -387,7 +400,7 @@ class V3ApiTest {
     @Order(11)
     void improvementFromResultChapterFilterAndHospitalIsolation() throws Exception {
         JsonNode items = results("2026-11");
-        JsonNode target = findByCode(items, "i01", "CARD");
+        JsonNode target = findByCode(items, "i03", "SURG");
 
         // 指标结果可直接建整改，并带上基线值
         JsonNode improvement = ok("POST", "/improvements",
@@ -413,6 +426,121 @@ class V3ApiTest {
                 "res-h002", "H002", "def-x", "i01", "另一医院结果", "2026-11", "CARD", 0.5, "red", "2026-11-30");
         JsonNode notFound = error(404, "GET", "/metric-results/res-h002", null, "quality");
         assertEquals("not_found", notFound.path("code").asText());
+    }
+
+    @Test
+    @Order(12)
+    void replayUsesOriginalMappingVersionAndUnknownDefinitionsAreRejected() throws Exception {
+        JsonNode before = ok("GET", "/source-mappings?sourceCode=CSV-IMPORT", null);
+        int originalVersion = before.path("items").get(0).path("version").asInt();
+        JsonNode oldBatch = ok("POST", "/ingestion/batches", batchBody("2027-01",
+                row("i01", "CARD", 8d, 2000d, null, "%")));
+        assertEquals("validated", oldBatch.path("batch").path("status").asText());
+
+        JsonNode changed = json.createObjectNode();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) changed).put("sourceCode", "CSV-IMPORT");
+        com.fasterxml.jackson.databind.node.ObjectNode fields =
+                ((com.fasterxml.jackson.databind.node.ObjectNode) changed).putObject("fields");
+        fields.put("metricCode", "metric");
+        fields.put("deptCode", "dept");
+        fields.put("numerator", "num");
+        fields.put("denominator", "den");
+        fields.put("value", "val");
+        fields.put("unit", "unit");
+        ((com.fasterxml.jackson.databind.node.ObjectNode) changed).putObject("codeMap");
+        JsonNode saved = ok("PUT", "/source-mappings", changed.toString());
+        assertEquals(originalVersion + 1, saved.path("version").asInt());
+
+        JsonNode replay = ok("POST", "/ingestion/batches/" + oldBatch.path("batch").path("id").asText()
+                + "/replay", "{}");
+        assertEquals("validated", replay.path("batch").path("status").asText(), replay.toString());
+        assertEquals(originalVersion, replay.path("batch").path("mappingVersion").asInt(),
+                "重放必须使用原批次的映射版本");
+
+        JsonNode restored = json.createObjectNode();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) restored).put("sourceCode", "CSV-IMPORT");
+        com.fasterxml.jackson.databind.node.ObjectNode restoredFields =
+                ((com.fasterxml.jackson.databind.node.ObjectNode) restored).putObject("fields");
+        restoredFields.put("metricCode", "code");
+        restoredFields.put("deptCode", "dept");
+        restoredFields.put("numerator", "num");
+        restoredFields.put("denominator", "den");
+        restoredFields.put("value", "val");
+        restoredFields.put("unit", "unit");
+        ((com.fasterxml.jackson.databind.node.ObjectNode) restored).putObject("codeMap");
+        ok("PUT", "/source-mappings", restored.toString());
+
+        JsonNode fakeDefinition = error(404, "POST", "/metric-definitions",
+                "{\"versionId\":\"missing-version\",\"code\":\"fake\",\"name\":\"fake\","
+                        + "\"direction\":\"low\",\"formulaType\":\"ratio\"}", "quality");
+        assertEquals("not_found", fakeDefinition.path("code").asText());
+    }
+
+    @Test
+    @Order(13)
+    void evidenceMustBelongToTheImprovementAndDepartmentCannotReadOtherScope() throws Exception {
+        JsonNode items = results("2026-11");
+        JsonNode target = findByCode(items, "i03", "SURG");
+        JsonNode improvement = ok("POST", "/improvements",
+                "{\"sourceType\":\"result\",\"sourceId\":\"" + target.path("id").asText()
+                        + "\",\"rootCause\":\"范围测试\",\"action\":\"范围测试措施\","
+                        + "\"owner\":\"CARD\",\"dueDate\":\"2027-01-31\"}");
+        JsonNode other = ok("POST", "/improvements",
+                "{\"sourceType\":\"result\",\"sourceId\":\"" + target.path("id").asText()
+                        + "\",\"rootCause\":\"证据归属测试\",\"action\":\"证据归属措施\","
+                        + "\"owner\":\"CARD\",\"dueDate\":\"2027-01-31\"}");
+        String evidenceId = "evi-v3-scope-test";
+        JdbcTemplate jdbc = context.getBean(JdbcTemplate.class);
+        jdbc.update("INSERT INTO evidence_item (id, hospital_id, owner_type, owner_id, title, material_type, status,"
+                        + " valid_until, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                evidenceId, "H001", "improvement", improvement.path("id").asText(), "范围材料", "检查记录",
+                "approved", null, "test", "2026-10-31");
+        JsonNode closed = ok("POST", "/improvements/" + improvement.path("id").asText() + "/review",
+                "{\"conclusion\":\"improved\",\"note\":\"材料归属正确\",\"evidenceItemId\":\""
+                        + evidenceId + "\"}");
+        assertEquals("closed", closed.path("status").asText());
+        JsonNode wrongOwner = error(400, "POST", "/improvements/" + other.path("id").asText() + "/review",
+                "{\"conclusion\":\"improved\",\"note\":\"复用他项材料\",\"evidenceItemId\":\""
+                        + evidenceId + "\"}", "quality");
+        assertEquals("validation_failed", wrongOwner.path("code").asText());
+        error(404, "GET", "/improvements/" + other.path("id").asText(), null, "department");
+    }
+
+    @Test
+    @Order(14)
+    void reportOnlyIncludesImprovementsRelatedToItsPeriod() throws Exception {
+        JsonNode items = results("2027-01");
+        JsonNode target = findByCode(items, "i03", "SURG");
+        JsonNode before = ok("POST", "/reports",
+                "{\"versionId\":\"" + versionId + "\",\"periodFrom\":\"2026-09\",\"periodTo\":\"2026-11\"}");
+        int existingCount = before.path("improvementCount").asInt();
+        ok("POST", "/improvements",
+                "{\"sourceType\":\"result\",\"sourceId\":\"" + target.path("id").asText()
+                        + "\",\"rootCause\":\"报告周期外\",\"action\":\"不应进入旧报告\","
+                        + "\"owner\":\"CARD\",\"dueDate\":\"2027-02-28\"}");
+        JsonNode report = ok("POST", "/reports",
+                "{\"versionId\":\"" + versionId + "\",\"periodFrom\":\"2026-09\",\"periodTo\":\"2026-11\"}");
+        assertEquals(existingCount, report.path("improvementCount").asInt(),
+                "报告不应包含周期外结果创建的整改");
+    }
+
+    @Test
+    @Order(15)
+    void drilldownReturnsMaskedSyntheticMembersForAuthorizedReviewOffice() throws Exception {
+        JsonNode items = results("2026-11");
+        JsonNode target = findByCode(items, "i01", "CARD");
+        JsonNode drilldown = ok("GET", "/metric-results/" + target.path("id").asText() + "/drilldown", null);
+        assertTrue(drilldown.path("members").path("masked").asBoolean());
+        assertTrue(drilldown.path("members").path("items").size() > 0,
+                "授权评审办应看到与分母数量一致的合成脱敏成员");
+        for (JsonNode member : drilldown.path("members").path("items")) {
+            assertTrue(member.path("inpatientNo").asText().contains("*"));
+            assertEquals("CARD", member.path("deptCode").asText());
+        }
+        JsonNode scoped = ok("GET", "/metric-results/" + target.path("id").asText() + "/drilldown", null,
+                "department");
+        assertTrue(scoped.path("members").path("items").isEmpty(),
+                "科室角色默认只读科室汇总，不返回成员级明细");
     }
 
     private static boolean isValidDocx(byte[] bytes) throws Exception {

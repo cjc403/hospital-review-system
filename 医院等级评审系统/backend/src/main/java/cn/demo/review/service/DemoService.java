@@ -23,9 +23,15 @@ public class DemoService {
     private final ObjectMapper json;
     private final Path uploads;
     private State state;
-    public DemoService(SnapshotRepository repository,ObjectMapper json,@Value("${demo.upload-dir}") String uploadDir) throws IOException {
+    public DemoService(SnapshotRepository repository,ObjectMapper json,@Value("${demo.upload-dir}") String uploadDir,
+                       cn.demo.review.v2.platform.ReviewProfile profile) throws IOException {
         this.repository=repository;this.json=json;uploads=Path.of(uploadDir).toAbsolutePath().normalize();Files.createDirectories(uploads);
-        state=repository.load().orElseGet(SyntheticData::initial);repository.save(state);
+        state=repository.load().orElseGet(() -> profile.isDemo() ? SyntheticData.initial() : new State());
+        if (profile.isDemo()) {
+            cn.demo.review.demo.DemoV1Enricher.enrich(state);
+            cn.demo.review.demo.DemoV1Enricher.writeMissingEvidence(state,uploads);
+        }
+        repository.save(state);
     }
     private <T> T copy(T source,Class<T> type){return json.convertValue(source,type);}
     private synchronized <T> T change(String role,String action,String objectId,Function<State,T> operation) {
@@ -175,6 +181,6 @@ public class DemoService {
         if(role(actor).equals("department"))throw error(403,"科室角色不可下载全院试算报告");ReportSnapshot snapshot=state.reportSnapshots.get(scoreId);if(snapshot==null)throw error(404,"试算报告不存在");return new Download("demo-report-"+scoreId+".docx","application/vnd.openxmlformats-officedocument.wordprocessingml.document",DocxReport.render(snapshot));
     }
     public Object reset(String actor,JsonNode body) {
-        quality(actor);if(!text(body,"confirm").equals("RESET_DEMO"))throw error(400,"重置需要confirm=RESET_DEMO");synchronized(this){State initial=SyntheticData.initial();log(initial,actor,"恢复初始演示数据","demo","仅重置合成业务状态；上传旧文件不再对外引用");repository.save(initial);state=initial;return Map.of("id","demo-reset");}
+        quality(actor);if(!text(body,"confirm").equals("RESET_DEMO"))throw error(400,"重置需要confirm=RESET_DEMO");synchronized(this){State initial=SyntheticData.initial();try{cn.demo.review.demo.DemoV1Enricher.writeMissingEvidence(initial,uploads);}catch(IOException e){throw new UncheckedIOException(e);}log(initial,actor,"恢复初始演示数据","demo","仅重置合成业务状态；上传旧文件不再对外引用");repository.save(initial);state=initial;return Map.of("id","demo-reset");}
     }
 }

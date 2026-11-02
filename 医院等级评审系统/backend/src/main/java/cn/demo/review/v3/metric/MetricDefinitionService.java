@@ -69,6 +69,13 @@ public class MetricDefinitionService {
         String name = text(body, "name");
         String direction = text(body, "direction");
         if (!DIRECTIONS.contains(direction)) throw V2Exception.badRequest("direction 只能是 high 或 low");
+        List<String> versionStatuses = jdbc.query(
+                "SELECT status FROM standard_version WHERE id=?",
+                (rs, i) -> rs.getString(1), versionId);
+        if (versionStatuses.isEmpty()) throw V2Exception.notFound("标准版本不存在");
+        if (!"published".equals(versionStatuses.get(0))) {
+            throw V2Exception.conflict("指标定义只能挂在已发布标准版本上");
+        }
         String formulaType = text(body, "formulaType");
         if (!FormulaEngine.ALLOWED_TYPES.contains(formulaType)) {
             throw new V2Exception(400, "formula_not_allowed", "只允许受控公式类型：" + FormulaEngine.ALLOWED_TYPES);

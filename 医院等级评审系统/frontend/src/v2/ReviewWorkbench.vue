@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import ClauseCenter from "./ClauseCenter.vue";
 import TaskBoard from "./TaskBoard.vue";
 import EvidenceLibrary from "./EvidenceLibrary.vue";
@@ -16,7 +16,7 @@ const tabs = [
   { key: "score", label: "试算与报告", component: ScoreCenter },
 ];
 const active = ref("clause");
-const current = tabs.find((tab) => tab.key === active.value) || tabs[0]!;
+const current = computed(() => tabs.find((tab) => tab.key === active.value) || tabs[0]!);
 </script>
 
 <template>

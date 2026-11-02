@@ -67,9 +67,32 @@ public class IngestionService {
             throw new V2Exception(400, "mapping_incomplete", "映射必须至少定义 fields.metricCode");
         }
         String mapping = body.toString();
+        List<Map<String, Object>> current = jdbc.query(
+                "SELECT mapping_json, version_no, updated_by, updated_at FROM source_mapping"
+                        + " WHERE hospital_id=? AND source_code=?",
+                (rs, i) -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("mappingJson", rs.getString("mapping_json"));
+                    m.put("version", rs.getInt("version_no"));
+                    m.put("updatedBy", rs.getString("updated_by"));
+                    m.put("updatedAt", rs.getString("updated_at"));
+                    return m;
+                }, ctx.hospitalId(), sourceCode);
         Integer next = jdbc.queryForObject(
                 "SELECT COALESCE(MAX(version_no),0)+1 FROM source_mapping WHERE hospital_id=? AND source_code=?",
                 Integer.class, ctx.hospitalId(), sourceCode);
+        if (!current.isEmpty()) {
+            Map<String, Object> old = current.get(0);
+            Integer historyCount = jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM source_mapping_history WHERE hospital_id=? AND source_code=? AND version_no=?",
+                    Integer.class, ctx.hospitalId(), sourceCode, old.get("version"));
+            if (historyCount == null || historyCount == 0) {
+                jdbc.update("INSERT INTO source_mapping_history (id, hospital_id, source_code, mapping_json, version_no,"
+                                + " updated_by, updated_at) VALUES (?,?,?,?,?,?,?)",
+                        "map-hist-" + UUID.randomUUID(), ctx.hospitalId(), sourceCode, old.get("mappingJson"),
+                        old.get("version"), old.get("updatedBy"), old.get("updatedAt"));
+            }
+        }
         int updated = jdbc.update("UPDATE source_mapping SET mapping_json=?, version_no=?, updated_by=?, updated_at=?"
                         + " WHERE hospital_id=? AND source_code=?",
                 mapping, next, ctx.userId(), now(), ctx.hospitalId(), sourceCode);
@@ -78,6 +101,9 @@ public class IngestionService {
                             + " updated_by, updated_at) VALUES (?,?,?,?,?,?,?)",
                     "map-" + UUID.randomUUID(), ctx.hospitalId(), sourceCode, mapping, next, ctx.userId(), now());
         }
+        jdbc.update("INSERT INTO source_mapping_history (id, hospital_id, source_code, mapping_json, version_no,"
+                        + " updated_by, updated_at) VALUES (?,?,?,?,?,?,?)",
+                "map-hist-" + UUID.randomUUID(), ctx.hospitalId(), sourceCode, mapping, next, ctx.userId(), now());
         audit.record(ctx, requestId, "更新来源映射", "source_mapping", sourceCode, "映射版本=" + next);
         return mappings(ctx, sourceCode).get("items") instanceof List<?> items && !items.isEmpty()
                 ? (Map<String, Object>) items.get(0) : Map.of();
@@ -117,7 +143,8 @@ public class IngestionService {
         } catch (Exception e) {
             throw V2Exception.conflict("原批次没有可重放的原始数据");
         }
-        Map<String, Object> mapping = currentMapping(ctx, (String) sources.get(0).get("code"));
+        Map<String, Object> mapping = mappingForVersion(ctx, (String) sources.get(0).get("code"),
+                ((Number) batch.get("mappingVersion")).intValue());
         if (mapping == null) throw new V2Exception(400, "mapping_incomplete", "该数据源尚未配置字段映射");
         return persistBatch(ctx, (String) sources.get(0).get("code"), (String) batch.get("sourceId"),
                 (String) batch.get("versionId"), String.valueOf(batch.get("period")), rows, mapping,
@@ -487,6 +514,24 @@ public class IngestionService {
         mapping.put("codeMap", root.path("codeMap"));
         mapping.put("version", rows.get(0).get("version"));
         return mapping;
+    }
+
+    private Map<String, Object> mappingForVersion(AuthContext ctx, String sourceCode, int version) {
+        List<Map<String, Object>> rows = jdbc.query(
+                "SELECT mapping_json, version_no FROM source_mapping_history"
+                        + " WHERE hospital_id=? AND source_code=? AND version_no=?",
+                (rs, i) -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    JsonNode root = readTree(rs.getString("mapping_json"));
+                    m.put("fields", root.path("fields"));
+                    m.put("codeMap", root.path("codeMap"));
+                    m.put("version", rs.getInt("version_no"));
+                    return m;
+                }, ctx.hospitalId(), sourceCode, version);
+        if (!rows.isEmpty()) return rows.get(0);
+        Map<String, Object> current = currentMapping(ctx, sourceCode);
+        if (current != null && ((Number) current.get("version")).intValue() == version) return current;
+        return null;
     }
 
     private Map<String, Object> source(AuthContext ctx, String sourceCode) {

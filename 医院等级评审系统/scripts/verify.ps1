@@ -14,4 +14,6 @@ try {
 } finally { Pop-Location }
 & node.exe --test (Join-Path $PSScriptRoot 'serve-demo.test.mjs')
 if ($LASTEXITCODE -ne 0) { throw 'Demo server tests failed.' }
-Write-Host 'All backend, frontend and demo-server checks passed.'
+& node.exe (Join-Path $PSScriptRoot 'integration-check-isolated.mjs')
+if ($LASTEXITCODE -ne 0) { throw 'Integration verification failed.' }
+Write-Host 'All backend, frontend, demo-server and isolated integration checks passed.'

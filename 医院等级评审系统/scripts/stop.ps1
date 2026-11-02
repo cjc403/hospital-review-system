@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $statePath = Join-Path $projectRoot '.runtime\processes.json'
 if (!(Test-Path -LiteralPath $statePath)) { if (!$Quiet) { Write-Host '未找到本演示的运行记录。' }; exit 0 }
-$saved = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
+$saved = Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
 function Stop-MatchingTree([int]$ProcessIdValue, [string]$Marker) {
     $children = Get-CimInstance Win32_Process -Filter ('ParentProcessId=' + $ProcessIdValue) -ErrorAction SilentlyContinue
     foreach ($child in $children) {

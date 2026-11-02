@@ -44,7 +44,7 @@ class V2ApiTest {
     void start() throws Exception {
         root = Files.createTempDirectory("hospital-v2-");
         context = new SpringApplicationBuilder(DemoApplication.class).run(
-                "--server.port=0",
+                "--server.port=0", "--demo.rich-seed.enabled=false",
                 "--spring.datasource.url=jdbc:h2:file:" + root.resolve("v2state").toString().replace('\\', '/')
                         + ";DB_CLOSE_ON_EXIT=FALSE",
                 "--review.storage-dir=" + root.resolve("v2-evidence"),
@@ -52,7 +52,7 @@ class V2ApiTest {
                 "--spring.main.banner-mode=off");
         base = "http://127.0.0.1:" + context.getEnvironment().getProperty("local.server.port") + "/api/v2";
         prodContext = new SpringApplicationBuilder(DemoApplication.class).run(
-                "--server.port=0",
+                "--server.port=0", "--demo.rich-seed.enabled=false",
                 "--review.profile=prod",
                 "--spring.datasource.url=jdbc:h2:mem:v2prod;DB_CLOSE_DELAY=-1",
                 "--review.storage-dir=" + root.resolve("prod-evidence"),

@@ -10,6 +10,50 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.*;
 
 class SyntheticDataTest {
+    @Test void enrichedScoresRespectExistingDeferralAndKeepAuditSnapshot() {
+        var s = SyntheticData.initial();
+        s.workspace.scoreRuns.clear(); s.reportSnapshots.clear(); s.schemaVersion = 1;
+        s.workspace.prerequisites.get(0).compliance = "non_compliant";
+        var audit = new cn.demo.review.domain.Model.AuditSample();
+        audit.id = "user-audit"; audit.errorRate = 0.2; audit.sampleCount = 10; audit.errorCount = 2;
+        s.workspace.auditSamples.add(audit);
+        cn.demo.review.demo.DemoV1Enricher.enrich(s);
+        assertTrue(s.workspace.scoreRuns.stream().allMatch(r -> "deferred".equals(r.grade)));
+        assertTrue(s.reportSnapshots.values().stream().allMatch(r -> r.auditSamples.stream().anyMatch(a -> "user-audit".equals(a.id))));
+    }
+    @Test void enrichmentPreservesExistingRecordsAndDoesNotDuplicateOnRestart() throws Exception {
+        var s = SyntheticData.initial();
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        String reports = mapper.writeValueAsString(s.reportSnapshots);
+        s.workspace.prerequisites.get(0).statement = "用户已维护的说明";
+        int files = s.workspace.evidenceFiles.size();
+        s.schemaVersion = 1;
+        cn.demo.review.demo.DemoV1Enricher.enrich(s);
+        cn.demo.review.demo.DemoV1Enricher.enrich(s);
+        assertEquals(files, s.workspace.evidenceFiles.size());
+        assertEquals("用户已维护的说明", s.workspace.prerequisites.get(0).statement);
+        assertEquals(reports, mapper.writeValueAsString(s.reportSnapshots));
+        var root = java.nio.file.Files.createTempDirectory("demo-v1-evidence-");
+        cn.demo.review.demo.DemoV1Enricher.writeMissingEvidence(s, root);
+        for (var file : s.workspace.evidenceFiles) {
+            assertEquals(file.size, java.nio.file.Files.size(root.resolve(file.id)));
+            assertTrue(java.nio.file.Files.readString(root.resolve(file.id)).contains("合成"));
+        }
+    }
+    @Test void initialDemoStateHasRichOperationalNarrativeData() {
+        var state = SyntheticData.initial();
+        assertTrue(state.workspace.indicators.stream().allMatch(i -> i.trends.size() >= 24));
+        assertTrue(state.workspace.reconciliations.size() >= 48);
+        assertTrue(state.workspace.evidenceFiles.size() >= 8);
+        assertTrue(state.workspace.scoreRuns.size() >= 3);
+        assertTrue(state.workspace.batches.size() >= 6);
+        assertTrue(state.workspace.manualValues.size() >= 6);
+        assertTrue(state.workspace.improvements.size() >= 6);
+        assertTrue(state.workspace.policies.size() >= 6);
+        assertTrue(state.workspace.improvements.stream().map(i -> i.status).collect(Collectors.toSet())
+                .containsAll(Set.of("opened", "assigned", "doing", "evidence_ready", "verified", "closed")));
+    }
+
     @Test void metadataCoversFiveNationalChaptersWithIndicatorSpecificDefinitions() {
         var indicators=SyntheticData.initial().workspace.indicators;
         var chapters=Set.of("资源配置与运行","医疗服务能力与医院质量安全","重点专业质量控制",

@@ -31,7 +31,7 @@ function Get-ListenerRecord([int]$Port, [string]$Marker) {
 }
 
 if (Test-Path -LiteralPath $statePath) {
-    $saved = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
+    $saved = Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
     $allOwned = $true
     foreach ($record in $saved.processes) {
         $owned = Get-Process -Id $record.id -ErrorAction SilentlyContinue

@@ -22,7 +22,7 @@ class ApiTest {
     Path root; String base;
     @BeforeAll void start() throws Exception { root=Files.createTempDirectory("hospital-api-"); open(); }
     void open() {
-        context=new SpringApplicationBuilder(DemoApplication.class).run("--server.port=0","--spring.datasource.url=jdbc:h2:file:"+root.resolve("state").toString().replace('\\','/')+";DB_CLOSE_ON_EXIT=FALSE","--demo.upload-dir="+root.resolve("uploads"),"--spring.main.banner-mode=off");
+        context=new SpringApplicationBuilder(DemoApplication.class).run("--server.port=0", "--demo.rich-seed.enabled=false","--spring.datasource.url=jdbc:h2:file:"+root.resolve("state").toString().replace('\\','/')+";DB_CLOSE_ON_EXIT=FALSE","--demo.upload-dir="+root.resolve("uploads"),"--spring.main.banner-mode=off");
         base="http://127.0.0.1:"+context.getEnvironment().getProperty("local.server.port")+"/api";
     }
     @AfterAll void stop() { if(context!=null) context.close(); }
@@ -86,7 +86,7 @@ class ApiTest {
             assertEquals(200,response.statusCode());
             assertEquals(0,json.readTree(response.body()).path("reconciliations").size(),actor+" must not receive patient rows");
         }
-        assertEquals(12,workspace().path("reconciliations").size());
+        assertTrue(workspace().path("reconciliations").size() >= 48);
     }
     @Test void historicalRerunIncludesItsCurrentPointAndRetainsFutureKnownHistory() throws Exception {
         success("POST","/calc-batches","{\"period\":\"2026-10\"}");
@@ -95,9 +95,9 @@ class ApiTest {
         success("POST","/calc-batches","{\"period\":\"2025-10\"}");
         var old=byId(workspace().path("indicators"),"i01");
         assertEquals(0.12,old.path("value").asDouble());
-        assertEquals(1,old.path("trends").size());
-        assertEquals("2025-10",old.path("trends").get(0).path("period").asText());
-        assertEquals(0.12,old.path("trends").get(0).path("value").asDouble());
+        assertEquals(12,old.path("trends").size());
+        assertEquals("2025-10",old.path("trends").get(11).path("period").asText());
+        assertEquals(0.12,old.path("trends").get(11).path("value").asDouble());
         success("POST","/calc-batches","{\"period\":\"2026-10\"}");
         var recent=byId(workspace().path("indicators"),"i01").path("trends");
         assertEquals(12,recent.size());
@@ -140,9 +140,9 @@ class ApiTest {
     }
     @Test void nonComplianceNeedsEvidenceAndStatement() throws Exception {
         String body="{\"compliance\":\"non_compliant\",\"workflow\":\"submitted\",\"statement\":\"需要整改\"}";
-        assertEquals(400,req("PUT","/prerequisites/p01",body,"quality").statusCode());
-        evidence("prereq","p01","proof.txt","合成说明");
-        success("PUT","/prerequisites/p01",body);
+        assertEquals(400,req("PUT","/prerequisites/p20",body,"quality").statusCode());
+        evidence("prereq","p20","proof.txt","合成说明");
+        success("PUT","/prerequisites/p20",body);
     }
     @Test void improvementRequiresSequentialTransitionsEvidenceAndLaterPeriodRecovery() throws Exception {
         String id=success("POST","/improvements","{\"indicatorId\":\"i01\",\"origin\":\"red_light\",\"owner\":\"质控科\",\"dueDate\":\"2026-11-30\"}").path("id").asText();

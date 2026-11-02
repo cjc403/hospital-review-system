@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import ObserveView from "./ObserveView.vue";
 import IngestionView from "./IngestionView.vue";
 import AlertView from "./AlertView.vue";
@@ -12,7 +12,7 @@ const tabs = [
   { key: "report", label: "报告中心", component: ReportView },
 ];
 const active = ref("observe");
-const current = tabs.find((tab) => tab.key === active.value) || tabs[0]!;
+const current = computed(() => tabs.find((tab) => tab.key === active.value) || tabs[0]!);
 </script>
 
 <template>

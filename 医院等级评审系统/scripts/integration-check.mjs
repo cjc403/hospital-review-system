@@ -24,6 +24,10 @@ try {
   assert.equal(state.meta.demo, true);
   assert.equal(state.indicators.length, 14);
   assert.equal(state.prerequisites.length, 30);
+  assert.ok(state.batches.length >= 6);
+  assert.ok(state.manualValues.length >= 6);
+  assert.ok(state.improvements.length >= 6);
+  assert.ok(state.policies.length >= 6);
   passed('health, seeded indicators and prerequisites');
 
   const patient = state.indicators.find(x => x.sourceTables.includes('visit_discharge') && x.denominator > 0);
@@ -134,6 +138,18 @@ try {
   await v2request(`/standards/versions/${version.id}/publish`, { method: 'POST', body: {}, expected: 409 });
   passed('v2 standard tree and published immutability');
 
+  const seededTasks = await v2request('/tasks');
+  const seededEvidence = await v2request('/evidence');
+  const seededBatches = await v2request('/batches?limit=100');
+  const seededRuns = await v2request('/score-runs?limit=20');
+  const seededSamples = await v2request('/audit-samples?limit=20');
+  assert.ok(seededTasks.items.length >= 30);
+  assert.ok(seededEvidence.items.length >= 12);
+  assert.ok(seededBatches.items.filter(item => item.status === 'applied').length >= 12);
+  assert.ok(seededRuns.items.length >= 4);
+  assert.ok(seededSamples.items.length >= 6);
+  passed('rich v2 demo scenario has tasks, evidence, applied batches, score snapshots and audit samples');
+
   const requestKey = `integration-${Date.now()}`;
   const assigned = await v2request('/tasks/assign', {
     method: 'POST',
@@ -239,7 +255,7 @@ try {
 
   const prereqs = await v2request('/prerequisites');
   assert.equal(prereqs.items.length, 30);
-  assert.equal(prereqs.items[0].compliance, 'unknown', '未维护的前置不能默认符合');
+  assert.ok(prereqs.items.some(item => item.compliance === 'unknown'), '演示前置必须保留待确认状态');
   await v2request('/prerequisites/PRE-07', {
     method: 'PUT',
     body: { versionId: version.id, compliance: 'non_compliant', workflow: 'accepted', statement: '集成检查：条款不符合' },
@@ -285,6 +301,16 @@ try {
   const v3Version = v3Defs.versionId;
   const i11Def = v3Defs.items.find(item => item.code === 'i11');
   assert.equal(i11Def.formulaType, 'drg_formula', 'i11 必须是受控 DRG 公式');
+  const seededV3Batches = await v3request('/ingestion/batches?limit=200');
+  assert.ok(seededV3Batches.items.filter(item => item.status === 'applied').length >= 12);
+  assert.ok(seededV3Batches.items.filter(item => item.status === 'rejected').length >= 4);
+  const seededV3Alerts = await v3request('/alerts?limit=200');
+  assert.ok(new Set(seededV3Alerts.items.map(item => item.type)).size >= 5);
+  const seededV3Improvements = await v3request('/improvements');
+  assert.ok(seededV3Improvements.items.length >= 8);
+  const seededV3Reports = await v3request('/reports?limit=20');
+  assert.ok(seededV3Reports.items.length >= 3);
+  passed('rich demo scenario has multi-period batches, quality gates, alerts, improvements and reports');
   passed('v3 metric definitions are versioned with controlled formulas');
 
   const v3Bad = await v3request('/ingestion/batches', {

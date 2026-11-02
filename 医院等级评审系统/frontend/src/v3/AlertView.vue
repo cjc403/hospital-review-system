@@ -19,6 +19,7 @@ const reviewing = ref("");
 const reviewDraft = ref({ conclusion: "partially_improved", note: "", evidenceItemId: "" });
 
 const canWrite = computed(() => role.value === "quality");
+const canHandleAlert = computed(() => role.value === "quality" || role.value === "department");
 const statusLabels: Record<string, string> = {
   open: "待确认",
   acknowledged: "已确认",
@@ -55,6 +56,11 @@ async function loadImprovements() {
   } catch (e) {
     error.value = errorText(e);
   }
+}
+
+function visibleAlertActions(status: V3Alert["status"]): string[] {
+  const actions = alertActions(status);
+  return role.value === "department" ? actions.filter((action) => action === "ack") : actions;
 }
 
 async function act(alert: V3Alert, action: string) {
@@ -178,8 +184,8 @@ onMounted(async () => {
                 </td>
                 <td>
                   <div class="inline-filters">
-                    <template v-for="action in alertActions(alert.status)" :key="action">
-                      <button class="button-small" :disabled="busy || !canWrite" @click="act(alert, action)">
+                    <template v-for="action in visibleAlertActions(alert.status)" :key="action">
+                      <button class="button-small" :disabled="busy || !canHandleAlert" @click="act(alert, action)">
                         {{ alertActionLabels[action] }}
                       </button>
                     </template>
@@ -261,7 +267,7 @@ onMounted(async () => {
                   </span>
                 </td>
                 <td>
-                  {{ improvement.reviewConclusion || "—" }}
+                  {{ improvement.reviewConclusion === 'improved' ? '已改善' : improvement.reviewConclusion === 'partially_improved' ? '部分改善' : improvement.reviewConclusion === 'not_recovered' ? '未恢复' : improvement.reviewConclusion === 'invalidated' ? '问题不成立' : '—' }}
                   <div v-if="improvement.baselineValue !== null" class="cell-sub muted">
                     基线 {{ improvement.baselineValue }} → 最新 {{ improvement.latestValue ?? "—" }}
                     <span v-if="improvement.targetValue !== null"> / 目标 {{ improvement.targetValue }}</span>
@@ -315,4 +321,6 @@ onMounted(async () => {
   flex-direction: column;
   gap: 16px;
 }
+.table-wrap { max-height: 480px; overflow: auto; }
+thead { position: sticky; top: 0; z-index: 1; background: var(--surface, #fff); }
 </style>

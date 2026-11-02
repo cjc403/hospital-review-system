@@ -36,11 +36,11 @@ class FormulaEngineTest {
         assertEquals(0.5, result.value(), 1e-9);
         var skewed = List.of(
                 new FormulaEngine.Fact("2026-09", "CARD", 1d, 100d, 1.0, "%"),
-                new FormulaEngine.Fact("2026-09", "SURG", 9d, 900d, 1.0, "%"));
+                new FormulaEngine.Fact("2026-09", "SURG", 9d, 1000d, 0.9, "%"));
         var weighted = FormulaEngine.compute(I01, skewed, "2026-09", "ALL");
-        assertEquals(1.0, weighted.value(), 1e-9);
+        assertEquals(0.9091, weighted.value(), 1e-9, "公式结果按引擎的四位小数稳定化");
         assertEquals(10d, weighted.numerator());
-        assertEquals(1000d, weighted.denominator());
+        assertEquals(1100d, weighted.denominator());
     }
 
     @Test

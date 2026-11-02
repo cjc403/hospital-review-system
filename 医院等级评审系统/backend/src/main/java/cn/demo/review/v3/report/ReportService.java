@@ -51,12 +51,13 @@ public class ReportService {
         if (from.compareTo(to) > 0) throw V2Exception.badRequest("periodFrom 不能晚于 periodTo");
 
         List<Map<String, Object>> results = jdbc.query(
-                "SELECT metric_code, metric_name, dept_code, period_code, metric_value, unit, light, reason_code,"
+                "SELECT id, metric_code, metric_name, dept_code, period_code, metric_value, unit, light, reason_code,"
                         + " formula_type, definition_version, batch_id FROM metric_result"
                         + " WHERE hospital_id=? AND standard_version_id=? AND period_code>=? AND period_code<=?"
                         + " ORDER BY period_code, metric_code, dept_code",
                 (rs, i) -> {
                     Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("id", rs.getString("id"));
                     m.put("metricCode", rs.getString("metric_code"));
                     m.put("metricName", rs.getString("metric_name"));
                     m.put("deptCode", rs.getString("dept_code"));
@@ -86,8 +87,11 @@ public class ReportService {
                     m.put("status", rs.getString("status"));
                     return m;
                 }, ctx.hospitalId(), from, to);
-        List<Map<String, Object>> improvements = jdbc.query(
-                "SELECT id, alert_id, metric_code, status, review_conclusion, owner, evidence_item_id FROM v3_improvement"
+        Set<String> resultIds = results.stream().map(item -> (String) item.get("id")).collect(java.util.stream.Collectors.toSet());
+        Set<String> alertIds = alerts.stream().map(item -> (String) item.get("id")).collect(java.util.stream.Collectors.toSet());
+        List<Map<String, Object>> allImprovements = jdbc.query(
+                "SELECT id, alert_id, metric_code, status, review_conclusion, owner, evidence_item_id,"
+                        + " source_type, source_id, created_at FROM v3_improvement"
                         + " WHERE hospital_id=? ORDER BY created_at",
                 (rs, i) -> {
                     Map<String, Object> m = new LinkedHashMap<>();
@@ -98,8 +102,14 @@ public class ReportService {
                     m.put("conclusion", rs.getString("review_conclusion"));
                     m.put("owner", rs.getString("owner"));
                     m.put("evidenceItemId", rs.getString("evidence_item_id"));
+                    m.put("sourceType", rs.getString("source_type"));
+                    m.put("sourceId", rs.getString("source_id"));
+                    m.put("createdAt", rs.getString("created_at"));
                     return m;
                 }, ctx.hospitalId());
+        List<Map<String, Object>> improvements = allImprovements.stream()
+                .filter(item -> improvementInPeriod(ctx, item, from, to, resultIds, alertIds))
+                .toList();
         List<Map<String, Object>> evidence = new ArrayList<>();
         for (Map<String, Object> improvement : improvements) {
             Object evidenceItemId = improvement.get("evidenceItemId");
@@ -145,7 +155,7 @@ public class ReportService {
         } catch (Exception e) {
             throw new IllegalStateException("报告快照序列化失败", e);
         }
-        if (payload.length() > 15900) throw V2Exception.badRequest("所选周期数据过多，请缩小范围后重试");
+        if (payload.length() > 4_000_000) throw V2Exception.badRequest("所选周期数据超过报告容量，请缩小范围后重试");
         jdbc.update("INSERT INTO v3_report (id, hospital_id, standard_version_id, period_from, period_to,"
                         + " snapshot_json, created_at, created_by) VALUES (?,?,?,?,?,?,?,?)",
                 id, ctx.hospitalId(), versionId, from, to, payload, now(), ctx.userId());
@@ -157,7 +167,28 @@ public class ReportService {
         return get(ctx, id);
     }
 
+    private boolean improvementInPeriod(AuthContext ctx, Map<String, Object> improvement, String from, String to,
+                                        Set<String> resultIds, Set<String> alertIds) {
+        String alertId = (String) improvement.get("alertId");
+        if (alertId != null) return alertIds.contains(alertId);
+        String sourceType = (String) improvement.get("sourceType");
+        String sourceId = (String) improvement.get("sourceId");
+        if ("result".equals(sourceType)) return resultIds.contains(sourceId);
+        if ("audit_sample".equals(sourceType) && sourceId != null) {
+            List<String> periods = jdbc.query("SELECT period_code FROM audit_sample WHERE id=? AND hospital_id=?",
+                    (rs, i) -> rs.getString(1), sourceId, ctx.hospitalId());
+            return !periods.isEmpty() && periods.get(0).compareTo(from) >= 0 && periods.get(0).compareTo(to) <= 0;
+        }
+        Object createdAt = improvement.get("createdAt");
+        if (createdAt instanceof String created && created.length() >= 7) {
+            String createdPeriod = created.substring(0, 7);
+            return createdPeriod.compareTo(from) >= 0 && createdPeriod.compareTo(to) <= 0;
+        }
+        return false;
+    }
+
     public Map<String, Object> get(AuthContext ctx, String id) {
+        requireHospitalScope(ctx);
         List<Map<String, Object>> rows = jdbc.query(
                 "SELECT id, standard_version_id, period_from, period_to, snapshot_json, created_at, created_by"
                         + " FROM v3_report WHERE id=? AND hospital_id=?",
@@ -191,6 +222,7 @@ public class ReportService {
     }
 
     public List<Map<String, Object>> list(AuthContext ctx, int limit) {
+        if (ctx.deptScoped()) return List.of();
         return jdbc.query("SELECT id, period_from, period_to, created_at FROM v3_report WHERE hospital_id=?"
                         + " ORDER BY created_at DESC LIMIT ?",
                 (rs, i) -> {
@@ -204,6 +236,7 @@ public class ReportService {
     }
 
     public byte[] document(AuthContext ctx, String id, String requestId) throws IOException {
+        requireHospitalScope(ctx);
         List<String> rows = jdbc.query(
                 "SELECT snapshot_json FROM v3_report WHERE id=? AND hospital_id=?",
                 (rs, i) -> rs.getString(1), id, ctx.hospitalId());
@@ -212,6 +245,10 @@ public class ReportService {
         byte[] bytes = V3Docx.render(snapshot);
         audit.record(ctx, requestId, "导出 v3 报告", "v3_report", id, "快照 DOCX");
         return bytes;
+    }
+
+    private static void requireHospitalScope(AuthContext ctx) {
+        if (ctx.deptScoped()) throw V2Exception.forbidden("当前账号仅有科室范围，不能读取全院报告");
     }
 
     @SuppressWarnings("unchecked")

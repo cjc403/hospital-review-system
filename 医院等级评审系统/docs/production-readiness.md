@@ -13,7 +13,7 @@
 - 证据：版本 + SHA-256 + 审核 + 下载授权 + 危险文件/魔数拦截；存储走 `BlobStore` 接口（当前本地目录实现）。
 - 迁移：`V2Schema` 版本 2（H2 与 PostgreSQL 同构 DDL），`db/migration/postgresql/V2__v02_core.sql`。
 - 可观测性：`X-Request-Id` 贯穿过滤链与审计；`/api/health`；结构化错误体。
-- 验证（v3 交付后）：后端 **79 项**、前端 **36 项**、集成检查 **25 组**（v1 七组 + v0.2 十组 + v3 七组）；PostgreSQL 迁移（版本 4，34 张表）与备份恢复已在临时隔离集群验证。
+- 验证（v3 交付后）：后端 **83 项**、前端 **36 项**、隔离集成检查 **25 组**（v1 七组 + v0.2 十组 + v3 八组）；PostgreSQL 迁移脚本已追加到版本 6，真实 PostgreSQL/备份恢复仍需按目标环境复核。
 
 ## 2. 尚未验证（必须写清楚）
 
@@ -24,7 +24,7 @@
 | 统一身份（OIDC/LDAP） | 只有 `TokenAuthenticator` 接口 + 一律拒绝的替身 | 需身份提供方地址、客户端凭据、字段映射 |
 | 对象存储（S3 兼容） | 只有本地目录 `LocalBlobStore` | 需端点、桶名、密钥策略 |
 | 性能与容量 | 未测 | 需真实数据量；条款树/任务列表/批次分页的索引已建，但无基准 |
-| 浏览器人工走查 | 仍未执行（含 v3 工作台） | 工具会话内启动的进程会被回收，无法保持服务在线；需用户本地启动后点查 |
+| 浏览器人工走查 | ✅ 已走查 v3 四个页签、合成数据标识、科室 CARD 范围与预警“仅确认”按钮；完整业务点击链路仍未覆盖 | 需用户本地继续走查上传、审核、报告下载等完整流程 |
 | 外部数据适配（HIS/EMR/LIS/PACS/DRG） | 适配器契约与 CSV/HTTP 实现已完成契约测试 | 真实接口需数据字典、只读账号与网络策略 |
 | 前置/抽查延期判定接入 v0.2 | ✅ 已实现并测试（前置不符合或错误率严格 >10% → 延期） | — |
 
@@ -52,13 +52,19 @@
 
 ## 4.1 v3 新增（数据中台）
 
-- 契约：`docs/v3-api-contract.md`；迁移版本 4（11 张表）+ 版本 5（整改表 5 列）：`metric_definition`、`source_mapping`、`ingestion_batch`、`canonical_fact`、`v3_quality_issue`、`v3_trace`、`lineage_edge`、`metric_result`、`v3_alert`、`v3_improvement`、`v3_report`。
+- 契约：`docs/v3-api-contract.md`；迁移版本 4（11 张表）+ 版本 5（整改表 5 列）+ 版本 6（`source_mapping_history`）：`metric_definition`、`source_mapping`、`ingestion_batch`、`canonical_fact`、`v3_quality_issue`、`v3_trace`、`lineage_edge`、`metric_result`、`v3_alert`、`v3_improvement`、`v3_report`。
 - 受控公式：ratio / weighted_ratio / month_avg / year_end_snapshot / drg_formula / trend；其他类型 400 `formula_not_allowed`。
-- 已本地验证：批次阻断与重放、i11 加权不得退化为平均、i12 年末快照、科室范围、预警状态机、整改复核、报告字节稳定。
+- 已本地验证：批次阻断与按历史映射版本重放、i11 加权不得退化为平均、i12 年末快照、科室范围、预警状态机、整改复核、报告字节稳定；集成门槛使用临时隔离服务，重复运行不会复用旧批次。
 - 仍未验证：真实数据源、患者级明细授权视图、预警通知与升级、性能容量。
 
 ## 5. 回滚边界
 
 - 代码：回退到交付提交；v0.2 表为新增，v1 表未修改。
-- 数据：v2 表可整体 `DROP` 并删除 `schema_migration` 中 version=2 记录；执行前必须备份。
+- 数据：已交付迁移只追加，不得通过 DROP 表或删除迁移记录回退。需要恢复时，先停服并将备份恢复到独立目录/实例验证；不可修改、删除已应用批次、材料版本、试算快照和审计事件。
 - 存储：`review.storage-dir` 下的材料文件与 `evidence_version` 一一对应，删除表记录不会自动删文件，需人工核对。
+
+## 6. 丰富演示数据（2026-10-31）
+
+- 追加 V7 场景 marker、V8 报告快照容量迁移；H2 默认模式与 PostgreSQL 兼容模式测试通过，同构 PostgreSQL SQL 已提供，目标 PostgreSQL 实库本轮未运行。
+- `review.profile=prod` 不生成演示数据，已用新建临时库验证；丰富场景仅用于本地 demo，未接入任何真实医院。
+- 数据范围、真实计数、旧库保留策略及组会路线见 `docs/demo-data-guide.md`。演示数据丰富度不构成生产可用性的验收证据。

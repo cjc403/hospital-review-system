@@ -14,6 +14,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.util.Set;
 
@@ -32,14 +33,17 @@ public class V3Seeder implements ApplicationRunner {
     private final MetricDefinitionService definitions;
     private final IngestionService ingestion;
     private final ObjectMapper json;
+    private final boolean richSeedEnabled;
 
     public V3Seeder(ReviewProfile profile, JdbcTemplate jdbc, MetricDefinitionService definitions,
-                    IngestionService ingestion, ObjectMapper json) {
+                    IngestionService ingestion, ObjectMapper json,
+                    @Value("${demo.rich-seed.enabled:true}") boolean richSeedEnabled) {
         this.profile = profile;
         this.jdbc = jdbc;
         this.definitions = definitions;
         this.ingestion = ingestion;
         this.json = json;
+        this.richSeedEnabled = richSeedEnabled;
     }
 
     @Override
@@ -75,6 +79,8 @@ public class V3Seeder implements ApplicationRunner {
             log.info("seeded CSV-IMPORT mapping");
         }
 
+        // 丰富场景负责完整的 12 个月；精简基线仅供契约测试使用。
+        if (richSeedEnabled) return;
         Integer batches = jdbc.queryForObject("SELECT COUNT(*) FROM ingestion_batch WHERE hospital_id=?",
                 Integer.class, "H001");
         if (batches != null && batches > 0) return;

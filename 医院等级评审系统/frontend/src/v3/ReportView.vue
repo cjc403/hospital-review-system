@@ -6,7 +6,7 @@ import { notify, role } from "../store";
 
 const reports = ref<{ id: string; periodFrom: string; periodTo: string; createdAt: string }[]>([]);
 const versionId = ref("");
-const form = ref({ periodFrom: "2026-09", periodTo: "2026-12" });
+const form = ref({ periodFrom: "2026-07", periodTo: "2026-09" });
 const detail = ref<V3Report | null>(null);
 const loading = ref(false);
 const busy = ref(false);
@@ -78,6 +78,7 @@ onMounted(async () => {
 
 <template>
   <div class="v3-view">
+    <p v-if="role === 'department'" class="hint">当前账号仅查看本科室数据，全院报告需由院级授权角色查看。</p>
     <div v-if="error" class="error-box">
       {{ error }}
       <button class="text-button" @click="loadReports">重试</button>

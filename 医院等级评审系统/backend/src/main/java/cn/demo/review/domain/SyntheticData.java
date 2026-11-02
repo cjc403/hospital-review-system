@@ -56,8 +56,7 @@ public final class SyntheticData {
             }
             for (int m = 0; m < 12; m++) {
                 YearMonth p = YearMonth.of(2025, 10).plusMonths(m);
-                double factor = def.isLowBetter() ? 0.86 + m * 0.014 : 1.07 - m * 0.006;
-                double v = m == 11 ? def.demoCurrent : round(def.demoCurrent * factor);
+                double v = round(monthlyValue(def, p));
                 i.trends.add(new Trend(p.toString(), def.isPercent() ? Math.min(100, v) : v));
             }
             fillFacts(i, w.departments, "2026-09");
@@ -116,8 +115,9 @@ public final class SyntheticData {
             w.improvements.add(im);
             s.improvementBaselinePeriods.put(im.id, "2026-09");
         }
-        String[] policyTitles = {"三级医院评审标准（2025年版）", "国家三级公立医院绩效监测操作手册（2025版）", "院内演示指标口径说明"};
-        for (int n = 0; n < 3; n++) {
+        String[] policyTitles = {"三级医院评审标准（2025年版）", "国家三级公立医院绩效监测操作手册（2025版）", "院内演示指标口径说明",
+                "医院质量安全月度分析简报（合成）", "科室整改闭环管理办法（演示）", "数据质量门与批次重放说明（演示）"};
+        for (int n = 0; n < policyTitles.length; n++) {
             Policy p = new Policy();
             p.id = "policy-" + (n + 1); p.code = "POL-DEMO-" + (n + 1); p.title = policyTitles[n];
             p.kind = n == 2 ? "indicator_pack" : "national_standard";
@@ -127,6 +127,7 @@ public final class SyntheticData {
             p.note = "本轮仅登记元数据；不自动解析或改写政策";
             w.policies.add(p);
         }
+        cn.demo.review.demo.DemoV1Enricher.enrich(s);
         return s;
     }
 
@@ -153,8 +154,7 @@ public final class SyntheticData {
     public static void fillFacts(Indicator i, List<Department> departments, String period) {
         IndicatorDefinition def = PACK.indicator(i.id);
         if (def == null || def.demoCurrent == null) throw new IllegalStateException("缺少演示口径定义：" + i.id);
-        boolean later = YearMonth.parse(period).isAfter(YearMonth.of(2026, 9));
-        double desired = def.demoCurrent * (later ? (def.isLowBetter() ? 0.5 : 1.05) : 1);
+        double desired = monthlyValue(def, YearMonth.parse(period));
         i.departmentValues.clear();
         double numerator = 0, denominator = 0;
         for (int d = 0; d < departments.size(); d++) {
@@ -182,6 +182,20 @@ public final class SyntheticData {
             i.numerator = null; i.denominator = null; i.autoValue = round(desired);
         }
         i.value = i.autoValue; i.source = "auto"; i.light = currentLight(i, period);
+    }
+
+    private static double monthlyValue(IndicatorDefinition def, YearMonth period) {
+        if (period.isAfter(YearMonth.of(2026,9))) return def.demoCurrent*(def.isLowBetter()?0.5:1.05);
+        int month=(int)Math.max(0,Math.min(11,java.time.temporal.ChronoUnit.MONTHS.between(YearMonth.of(2025,10),period)));
+        double factor;
+        if (Set.of("i05","i06","i08").contains(def.code)) {
+            // 三条改善后稳定的序列，最后三个月保持本期值。
+            double remaining=Math.max(0,8-month)/8d;
+            factor=def.isLowBetter()?1+0.5*remaining:1-0.12*remaining;
+        } else if (Set.of("i11","i14").contains(def.code)) {
+            factor=month==11?1:0.64+month*0.004;
+        } else factor=def.isLowBetter()?0.78+month*0.02:1.066-month*0.006;
+        return def.demoCurrent*factor;
     }
 
     public static String currentLight(Indicator i, String period) {
