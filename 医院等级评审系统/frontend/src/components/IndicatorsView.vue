@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { currentUser, hasPermission } from "../auth";
 import { computed, ref, watch } from "vue";
 import {
   Search,
@@ -36,7 +37,7 @@ const selected = computed(() =>
   state.value!.indicators.find((x) => x.id === selectedId.value),
 );
 const detailTab = ref("trend");
-const department = ref(role.value === "department" ? "CARD" : "ALL");
+const department = ref(currentUser.value?.deptCode || "ALL");
 const memberRole = ref("denominator");
 const members = ref<MemberPage | null>(null);
 const membersLoading = ref(false);
@@ -44,7 +45,7 @@ const membersError = ref("");
 const memberPage = ref(1);
 let memberGeneration = 0;
 const canMembers = computed(
-  () => role.value === "quality" || role.value === "department",
+  () => hasPermission("member.read"),
 );
 function open(item: Indicator) {
   selectedId.value = item.id;
@@ -82,7 +83,7 @@ const trend = computed(() => {
         areaStyle: { opacity: 0.06 },
         markLine: {
           symbol: "none",
-          label: { formatter: "演示目标 {c}" },
+          label: { formatter: "目标 {c}" },
           lineStyle: { color: "#21a894", type: "dashed" },
           data: [{ yAxis: item?.target }],
         },
@@ -128,7 +129,7 @@ function changeDept() {
   <div class="page-intro">
     <div>
       <h2>指标监测</h2>
-      <p>从指标到科室，再到合成成员明细，逐层查看数据依据。</p>
+      <p>从指标到科室，再到成员明细，逐层查看数据依据。</p>
     </div>
     <span class="subtle-tag"
       >{{ state!.meta.period }} · {{ state!.indicators.length }} 项样例</span
@@ -186,7 +187,7 @@ function changeDept() {
             <th>指标 / 编码</th>
             <th>监测章节</th>
             <th>本期值</th>
-            <th>演示目标</th>
+            <th>目标</th>
             <th>监测状态</th>
             <th>数据来源</th>
             <th>责任部门</th>
@@ -259,7 +260,7 @@ function changeDept() {
         ><strong>{{ formatValue(selected.value, selected.unit) }}</strong>
       </div>
       <div>
-        <small>演示目标</small
+        <small>目标</small
         ><strong
           >{{ selected.direction === "high" ? "≥" : "≤" }}
           {{ formatValue(selected.target, selected.unit) }}</strong
@@ -283,7 +284,7 @@ function changeDept() {
         <BookOpen :size="15" />指标定义</button
       ><button
         :class="{ active: detailTab === 'members' }"
-        @click="detailTab = 'members'"
+        v-if="canMembers" @click="detailTab = 'members'"
       >
         <Users :size="15" />脱敏成员
       </button>
@@ -364,23 +365,23 @@ function changeDept() {
       ><div v-if="!canMembers" class="empty">
         <Users :size="32" /><strong>当前角色不开放成员明细</strong>
         <p>
-          院级领导与信息科可查看汇总；患者级合成明细由质控或本科负责人查看。
+          院级领导与信息科可查看汇总；患者级明细由质控或本科负责人查看。
         </p>
       </div>
       <template v-else
         ><div class="info-strip">
           <Info
             :size="17"
-          />所有住院号固定脱敏，均为合成样例。非患者指标可能没有成员清单。
+          />住院号已脱敏。非患者指标可能没有成员清单。
         </div>
         <div class="inline-filters">
           <select
             v-model="department"
             aria-label="成员科室"
-            :disabled="role === 'department'"
+            :disabled="!!currentUser?.deptCode"
             @change="changeDept"
           >
-            <option v-if="role !== 'department'" value="ALL">全部科室</option>
+            <option v-if="!currentUser?.deptCode" value="ALL">全部科室</option>
             <option
               v-for="dept in state!.departments"
               :key="dept.code"

@@ -1,4 +1,5 @@
-import { computed, ref } from "vue";
+import { currentUser, hasPermission, onSessionCleared } from "./auth";
+import { computed, ref, watch } from "vue";
 import { downloadFile, request } from "./api";
 import type { Role, Workspace } from "./types";
 
@@ -8,7 +9,7 @@ export const loading = ref(false);
 export const busy = ref(false);
 export const loadError = ref("");
 export const notice = ref<{ message: string; error: boolean } | null>(null);
-export const canWrite = computed(() => role.value === "quality");
+export const canWrite = computed(() => hasPermission("legacy.write"));
 export const roleLabels: Record<Role, string> = {
   quality: "质控管理员",
   leader: "院级领导",
@@ -16,6 +17,8 @@ export const roleLabels: Record<Role, string> = {
   information: "信息科",
 };
 let generation = 0;
+onSessionCleared(() => { generation++; workspace.value = null; notice.value = null; loadError.value = ""; loading.value = false; });
+watch(currentUser, user => { if (user) role.value = user.legacyRole; }, { immediate: true });
 let toastTimer: ReturnType<typeof setTimeout>;
 
 export function notify(message: string, error = false) {
@@ -25,6 +28,7 @@ export function notify(message: string, error = false) {
 }
 
 export async function loadWorkspace() {
+  if (!currentUser.value) return;
   const current = ++generation;
   loading.value = true;
   loadError.value = "";

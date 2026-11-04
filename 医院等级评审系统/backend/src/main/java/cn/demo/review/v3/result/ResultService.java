@@ -83,7 +83,7 @@ public class ResultService {
         members.put("masked", true);
         members.put("items", List.of());
         Object denominator = result.get("denominator");
-        if (ctx.has("review_office") || ctx.has("indicator_admin")) {
+        if (ctx.accountSession() ? ctx.can("member.read") : (ctx.has("review_office") || ctx.has("indicator_admin"))) {
             int total = denominator instanceof Number number ? Math.max(0, number.intValue()) : 0;
             int sampleSize = Math.min(total, 20);
             List<Map<String, Object>> items = new ArrayList<>();

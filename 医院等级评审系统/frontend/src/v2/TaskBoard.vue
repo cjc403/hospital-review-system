@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { errorText, v2 } from "./api";
-import { allowedTaskActions } from "./domain";
+import { permittedTaskActions } from "../access";
+import { hasPermission, currentUser } from "../auth";
 import type {
   V2Clause,
   V2Department,
@@ -11,7 +12,7 @@ import type {
   V2TaskSummary,
   V2VersionDetail,
 } from "./types";
-import { notify, role } from "../store";
+import { notify } from "../store";
 
 const tasks = ref<V2Task[]>([]);
 const summary = ref<V2TaskSummary | null>(null);
@@ -34,8 +35,8 @@ const form = ref({
   requestKey: "",
 });
 
-const canAssign = computed(() => role.value === "quality");
-const isDeptView = computed(() => role.value === "department");
+const canAssign = computed(() => hasPermission("task.assign"));
+const isDeptView = computed(() => !!currentUser.value?.deptCode);
 const visibleTasks = computed(() =>
   tasks.value.filter(
     (task) => statusFilter.value === "ALL" || task.status === statusFilter.value,
@@ -77,7 +78,7 @@ const actionLabels: Record<string, string> = {
 };
 
 function actionsFor(task: V2Task) {
-  return allowedTaskActions(task.status, isDeptView.value);
+  return permittedTaskActions(task.status);
 }
 
 async function loadTasks() {
@@ -202,7 +203,7 @@ watch(
   (id) => loadClauses(id),
 );
 onMounted(async () => {
-  await Promise.all([loadTasks(), loadReference()]);
+  await Promise.all([loadTasks(), ...(canAssign.value ? [loadReference()] : [])]);
 });
 </script>
 
@@ -229,7 +230,7 @@ onMounted(async () => {
       <div class="metric-card">
         <span class="metric-label">待审核</span>
         <strong class="metric-number">{{ summary.submitted }}</strong>
-        <span class="metric-foot">评审办受理或退回</span>
+        <span class="metric-foot">授权审核人受理或退回</span>
       </div>
       <div class="metric-card">
         <span class="metric-label">逾期</span>
@@ -365,7 +366,7 @@ onMounted(async () => {
                       {{ actionLabels[next] }}
                     </button>
                   </template>
-                  <span v-if="!actionsFor(task).length" class="muted">已结束</span>
+                  <span v-if="!actionsFor(task).length" class="muted">{{ ['accepted','cancelled'].includes(task.status) ? '已结束' : '当前无可执行操作' }}</span>
                 </div>
               </td>
             </tr>
@@ -400,6 +401,9 @@ onMounted(async () => {
   font-size: 12px;
   color: #44546a;
 }
+.stats-strip > .metric-card { flex-direction:column; align-items:flex-start; gap:8px; padding:16px; }
+.stats-strip .metric-number {font-size:25px; white-space:nowrap;}
+@media(max-width:1100px){.stats-strip{grid-template-columns:repeat(2,minmax(0,1fr));}}
 .return-input {
   width: 120px;
   min-height: 30px;

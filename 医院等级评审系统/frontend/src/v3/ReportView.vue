@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { hasPermission } from "../auth";
 import { computed, onMounted, ref } from "vue";
 import { errorText, v3, v3Download } from "./api";
 import type { V3Definition, V3Report } from "./types";
@@ -12,7 +13,7 @@ const loading = ref(false);
 const busy = ref(false);
 const error = ref("");
 
-const canWrite = computed(() => role.value === "quality");
+const canWrite = computed(() => hasPermission("report.write"));
 
 async function loadVersion() {
   try {
@@ -71,7 +72,7 @@ async function download(report: V3Report) {
 }
 
 onMounted(async () => {
-  await loadVersion();
+  if (canWrite.value) await loadVersion();
   await loadReports();
 });
 </script>

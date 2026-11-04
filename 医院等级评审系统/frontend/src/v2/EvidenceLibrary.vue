@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import { hasPermission } from "../auth";
 import { computed, onMounted, ref } from "vue";
 import { errorText, v2, v2Download } from "./api";
 import type { V2EvidenceItem, V2EvidenceVersion, V2Task } from "./types";
-import { notify, role } from "../store";
+import { notify } from "../store";
 
 const items = ref<V2EvidenceItem[]>([]);
 const versions = ref<V2EvidenceVersion[]>([]);
@@ -22,9 +23,9 @@ const form = ref({
 });
 
 const canUpload = computed(() =>
-  ["quality", "department"].includes(role.value),
+  hasPermission("evidence.upload"),
 );
-const canReview = computed(() => role.value === "quality");
+const canReview = computed(() => hasPermission("evidence.review"));
 const statusLabels: Record<string, string> = {
   pending: "待审核",
   approved: "已通过",
@@ -175,10 +176,10 @@ onMounted(async () => {
           <span>关联类型</span>
           <select v-model="form.ownerType">
             <option value="task">任务</option>
-            <option value="clause">条款</option>
-            <option value="indicator">指标</option>
-            <option value="prereq">前置要求</option>
-            <option value="improvement">整改单</option>
+            <option v-if="hasPermission('legacy.write')" value="clause">条款</option>
+            <option v-if="hasPermission('legacy.write')" value="indicator">指标</option>
+            <option v-if="hasPermission('legacy.write')" value="prereq">前置要求</option>
+            <option v-if="hasPermission('improvement.read')" value="improvement">整改单</option>
           </select>
         </label>
         <label class="field">
@@ -222,10 +223,10 @@ onMounted(async () => {
           <select v-model="filter.ownerType" aria-label="按关联类型筛选">
             <option value="">全部类型</option>
             <option value="task">任务</option>
-            <option value="clause">条款</option>
-            <option value="indicator">指标</option>
-            <option value="prereq">前置要求</option>
-            <option value="improvement">整改单</option>
+            <option v-if="hasPermission('legacy.write')" value="clause">条款</option>
+            <option v-if="hasPermission('legacy.write')" value="indicator">指标</option>
+            <option v-if="hasPermission('legacy.write')" value="prereq">前置要求</option>
+            <option v-if="hasPermission('improvement.read')" value="improvement">整改单</option>
           </select>
           <input
             v-model="filter.ownerId"

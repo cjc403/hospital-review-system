@@ -15,7 +15,7 @@ import Modal from "./Modal.vue";
 const creating = ref(false),
   selected = ref<Policy | null>(null),
   search = ref("");
-const allowed = computed(() => canWrite.value || role.value === "information");
+const allowed = computed(() => canWrite.value);
 const form = ref({
   code: "",
   title: "",
@@ -90,7 +90,7 @@ async function confirm() {
   <div class="info-strip">
     <Info
       :size="17"
-    />本地演示仅管理政策元数据与影响说明。涉及计分规则的变更将阻断确认，原始政策与参考文件保持留存。
+    />本地仅管理政策元数据与影响说明。涉及计分规则的变更将阻断确认，原始政策与参考文件保持留存。
   </div>
   <section class="card">
     <div class="section-heading">
@@ -237,7 +237,7 @@ async function confirm() {
     </dl>
     <div v-if="selected.impacts.includes('scoring_rule')" class="warning-strip">
       <LockKeyhole :size="18" />
-      <p>该记录涉及计分规则，禁止直接确认。演示系统不提供正式规则发布流程。</p>
+      <p>该记录涉及计分规则，禁止直接确认。系统不提供正式规则发布流程。</p>
     </div>
     <div class="form-actions">
       <button class="button" @click="selected = null">关闭</button

@@ -38,7 +38,7 @@ public class DemoService {
         State candidate=copy(state,State.class); T result=operation.apply(candidate);
         log(candidate,role,action,objectId,"演示环境 / 合成数据");repository.save(candidate);state=candidate;return result;
     }
-    private static void log(State s,String role,String action,String objectId,String detail){AuditLog l=new AuditLog();l.id=id("log");l.actor=role;l.action=action;l.objectId=objectId;l.detail=detail;l.createdAt=now();s.workspace.auditLogs.add(l);}
+    private static void log(State s,String role,String action,String objectId,String detail){AuditLog l=new AuditLog();l.id=id("log");l.actor=cn.demo.review.auth.RequestIdentity.get()!=null && cn.demo.review.auth.RequestIdentity.get().accountSession()?cn.demo.review.auth.RequestIdentity.get().userId():role;l.action=action;l.objectId=objectId;l.detail=detail;l.createdAt=now();s.workspace.auditLogs.add(l);}
     public static String role(String role){if(role==null || role.isBlank())return "quality";if(!Set.of("quality","leader","department","information").contains(role))throw error(403,"未知演示角色");return role;}
     private static void quality(String role){if(!role(role).equals("quality"))throw error(403,"此操作仅允许质控角色执行");}
     private static BusinessException error(int status,String message){return new BusinessException(status,message);}
@@ -58,24 +58,45 @@ public class DemoService {
     private static String date(JsonNode body,String name){String value=text(body,name);try{if(!LocalDate.parse(value).toString().equals(value))throw error(400,name+"格式须为YYYY-MM-DD");return value;}catch(DateTimeParseException e){throw error(400,name+"格式须为YYYY-MM-DD");}}
     public synchronized Workspace workspace(String actor) {
         String role=role(actor); Workspace result=copy(state.workspace,Workspace.class);
+        var auth=cn.demo.review.auth.RequestIdentity.get();
+        if(auth!=null&&auth.accountSession()&&!auth.hospitalId().equals("H001")) {
+            Workspace empty=new Workspace();empty.meta=copy(result.meta,Meta.class);empty.meta.hospitalName="第二演示医院（虚构）";empty.policies=result.policies;return empty;
+        }
+        if(auth!=null&&auth.accountSession()&&!auth.can("metric.read")) {
+            result.indicators.clear();result.manualValues.clear();result.reconciliations.clear();result.auditSamples.clear();result.scoreRuns.clear();result.improvements.clear();result.auditLogs.clear();result.batches.clear();result.evidenceFiles.clear();result.prerequisites.clear();return result;
+        }
         if(role.equals("leader") || role.equals("information"))result.reconciliations.clear();
         for(Indicator i:result.indicators){
             List<Trend> visible=i.trends.stream().filter(t->t.period.compareTo(result.meta.period)<=0).sorted(Comparator.comparing(t->t.period)).toList();
             i.trends=new ArrayList<>(visible.subList(Math.max(0,visible.size()-12),visible.size()));
         }
         if(role.equals("department")) {
-            result.departments.removeIf(d->!d.code.equals("CARD"));
-            for(Indicator i:result.indicators){i.departmentValues.removeIf(v->!v.code.equals("CARD"));DepartmentValue v=i.departmentValues.get(0);i.value=v.value;i.autoValue=v.value;i.numerator=v.numerator;i.denominator=v.denominator;i.light=v.light;i.source="auto";i.trends.clear();i.annualValues.clear();}
-            result.manualValues.removeIf(m->!m.deptCode.equals("CARD"));result.reconciliations.removeIf(r->!r.deptName.equals("心血管内科"));result.auditSamples.clear();result.scoreRuns.clear();result.improvements.clear();result.auditLogs.clear();result.batches.clear();result.evidenceFiles.clear();
+            String own=auth!=null&&auth.accountSession()?auth.deptCode():"CARD";
+            String ownName=result.departments.stream().filter(d->d.code.equals(own)).map(d->d.name).findFirst().orElse("");
+            result.departments.removeIf(d->!d.code.equals(own));
+            for(Indicator i:result.indicators){i.departmentValues.removeIf(v->!v.code.equals(own));if(i.departmentValues.isEmpty()){i.value=null;i.autoValue=null;i.trends.clear();i.annualValues.clear();continue;}DepartmentValue v=i.departmentValues.get(0);i.value=v.value;i.autoValue=v.value;i.numerator=v.numerator;i.denominator=v.denominator;i.light=v.light;i.source="auto";i.trends.clear();i.annualValues.clear();
+                for(Manual m:result.manualValues)if(m.deptCode.equals(own)&&m.indicatorId.equals(i.id)&&m.period.equals(result.meta.period)&&m.status.equals("approved")){i.value=m.value;i.source="manual";v.value=m.value;i.light=SyntheticData.light(i,i.value);v.light=i.light;}
+            }
+            result.manualValues.removeIf(m->!m.deptCode.equals(own));result.reconciliations.removeIf(r->!r.deptName.equals(ownName));result.auditSamples.clear();result.scoreRuns.clear();result.improvements.clear();result.auditLogs.clear();result.batches.clear();result.evidenceFiles.clear();result.prerequisites.clear();
+        }
+        if(auth!=null&&auth.accountSession()) {
+            if(!auth.can("member.read"))result.reconciliations.clear();
+            if(!auth.can("batch.read"))result.batches.clear();
+            if(!auth.can("manual.submit")&&!auth.can("legacy.write"))result.manualValues.clear();
+            if(!auth.can("audit.read"))result.auditLogs.clear();
+            if(!auth.can("report.read"))result.scoreRuns.clear();
+            if(!auth.can("improvement.read"))result.improvements.clear();
+            if(!auth.can("assessment.read"))result.prerequisites.clear();
+            if(!auth.can("legacy.write"))result.evidenceFiles.clear();
         }
         return result;
     }
     public MemberPage members(String actor,String indicatorId,String department,String memberRole,int page,int size) {
-        String role=role(actor);if(role.equals("leader") || role.equals("information"))throw error(403,"该角色不可查看成员明细");
+        String role=role(actor);var auth=cn.demo.review.auth.RequestIdentity.get();if(auth!=null&&auth.accountSession())auth.requirePermission("member.read");else if(role.equals("leader") || role.equals("information"))throw error(403,"该角色不可查看成员明细");
         if(!Set.of("numerator","denominator").contains(memberRole))throw error(400,"role须为numerator或denominator");
         if(page<1 || size<1 || size>100)throw error(400,"page至少为1，size须在1至100之间");
         String dept=department;
-        if(role.equals("department")){if(!dept.equals("ALL") && !dept.equals("CARD"))throw error(403,"科室角色仅可查看心血管内科");dept="CARD";}
+        if(role.equals("department")){var ctx=cn.demo.review.auth.RequestIdentity.get();String own=ctx!=null&&ctx.accountSession()?ctx.deptCode():"CARD";if(!dept.equals("ALL") && !dept.equals(own))throw error(403,"只能查看本科室成员");dept=own;}
         final String selected=dept;
         return change(role,"查看脱敏成员",indicatorId,s->{
             Indicator i=indicator(s,indicatorId);
@@ -90,12 +111,15 @@ public class DemoService {
         });
     }
     public Manual submitManual(String actor,JsonNode body) {
-        quality(actor);String iid=text(body,"indicatorId"),dept=text(body,"deptCode"),p=period(body),note=text(body,"note");double value=number(body,"value");
-        if(!dept.equals("ALL"))throw error(400,"本轮补录仅支持ALL全院覆盖");
+        var ctx=cn.demo.review.auth.RequestIdentity.get();
+        if(ctx!=null&&ctx.accountSession())ctx.requirePermission("manual.submit");else quality(actor);
+        String iid=text(body,"indicatorId"),dept=text(body,"deptCode"),p=period(body),note=text(body,"note");double value=number(body,"value");
+        if(ctx!=null&&ctx.accountSession()&&ctx.deptScoped())ctx.requireDept(dept);
+        else if(!dept.equals("ALL"))throw error(400,"院级账号补录使用ALL范围");
         return change(actor,"提交补录",iid,s->{Indicator i=indicator(s,iid);if(i.unit.equals("%") && value>100)throw error(400,"百分比补录须在0至100之间");
             boolean pending=s.workspace.manualValues.stream().anyMatch(m->m.indicatorId.equals(iid) && m.deptCode.equals(dept) && m.period.equals(p) && m.status.equals("submitted"));
             if(pending)throw error(409,"该指标该周期已有待审核补录，请先处理");
-            Manual m=new Manual();m.id=id("manual");m.indicatorId=iid;m.indicatorName=i.name;m.deptCode=dept;m.period=p;m.value=value;m.note=note;m.status="submitted";m.submitter="质控演示填报员";m.submittedAt=now();s.workspace.manualValues.add(m);return m;
+            Manual m=new Manual();m.id=id("manual");m.indicatorId=iid;m.indicatorName=i.name;m.deptCode=dept;m.period=p;m.value=value;m.note=note;m.status="submitted";m.submitter=ctx!=null&&ctx.accountSession()?ctx.userId():"质控演示填报员";m.submittedAt=now();s.workspace.manualValues.add(m);return m;
         });
     }
     public Manual reviewManual(String actor,String mid,JsonNode body) {

@@ -53,7 +53,7 @@ onBeforeUnmount(() => {
       >
         <header class="modal-header">
           <div>
-            <span class="eyebrow">医评智控 · 演示工作区</span>
+            <span class="eyebrow">医评智控 · 工作区</span>
             <h2>{{ title }}</h2>
           </div>
           <button

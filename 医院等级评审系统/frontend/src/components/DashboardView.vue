@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { canOpenPage } from "../access";
+import { currentUser } from "../auth";
 import { computed } from "vue";
 import {
   Activity,
@@ -127,13 +129,13 @@ const todos = computed(() => [
     icon: Activity,
     color: "orange",
   },
-]);
+].filter(todo => canOpenPage(todo.page)));
 </script>
 <template>
   <div class="welcome card">
     <div>
       <div class="eyebrow">
-        <span class="live-dot"></span>质量管理 · 全院协同
+        <span class="live-dot"></span>质量管理 · {{ currentUser?.deptName || '全院协同' }}
       </div>
       <h2>让每一次评审，都有据可循。</h2>
       <p>汇聚指标监测、数据核查与持续改进，掌握医院评审准备进展。</p>
@@ -147,7 +149,7 @@ const todos = computed(() => [
         <span></span><span></span><span></span><span></span>
       </div>
       <p>评审准备工作台</p>
-      <button class="text-button" @click="emit('navigate', 'score')">
+      <button v-if="canOpenPage('score')" class="text-button" @click="emit('navigate', 'score')">
         进入模拟评审 <ArrowRight :size="16" />
       </button>
     </div>
@@ -210,9 +212,9 @@ const todos = computed(() => [
       <div class="section-heading">
         <div>
           <h3>监测趋势</h3>
-          <p class="hint">近 12 个月 · 依据各期样例指标演示目标统计</p>
+          <p class="hint">近 12 个月 · 依据各期样例指标目标统计</p>
         </div>
-        <span class="subtle-tag">全院视角</span>
+        <span class="subtle-tag">{{ currentUser?.deptName || '全院视角' }}</span>
       </div>
       <Chart :option="trend" :height="260" />
     </section>
@@ -263,7 +265,7 @@ const todos = computed(() => [
             <tr>
               <th>指标名称</th>
               <th>本期值</th>
-              <th>演示目标</th>
+              <th>目标</th>
               <th>状态</th>
               <th>责任部门</th>
             </tr>
@@ -315,8 +317,8 @@ const todos = computed(() => [
     </section>
   </div>
   <div class="footnote">
-    本工作台使用合成数据。当前样例未覆盖
+    当前已配置指标未覆盖
     {{ w.meta.totalMonitoringClauses }} 条完整监测条款及 60%
-    覆盖要求，所有等次均为演示试算。
+    覆盖要求，所有等次均为试算。
   </div>
 </template>

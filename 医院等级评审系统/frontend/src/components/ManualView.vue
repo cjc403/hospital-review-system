@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { currentUser, hasPermission } from "../auth";
 import { computed, ref } from "vue";
 import { Plus, Info, ClipboardCheck } from "lucide-vue-next";
 import { workspace as state, busy, canWrite, mutate } from "../store";
@@ -9,7 +10,7 @@ import Modal from "./Modal.vue";
 const modal = ref(false);
 const form = ref({
   indicatorId: "",
-  deptCode: "ALL",
+  deptCode: currentUser.value?.deptCode || "ALL",
   period: "2026-09",
   value: 0,
   note: "",
@@ -26,7 +27,7 @@ const reviewNote = ref("");
 function create() {
   form.value = {
     indicatorId: state.value!.indicators[0]?.id || "",
-    deptCode: "ALL",
+    deptCode: currentUser.value?.deptCode || "ALL",
     period: state.value!.meta.period,
     value: 0,
     note: "",
@@ -71,7 +72,7 @@ async function saveReview() {
       <p>补充指标人工数据，保留自动原值与审核轨迹。</p>
     </div>
     <button
-      v-if="canWrite"
+      v-if="hasPermission('manual.submit')"
       class="button primary"
       :disabled="busy"
       @click="create"
@@ -196,8 +197,8 @@ async function saveReview() {
         <label class="field"
           >数据周期<input v-model="form.period" type="month" required /></label
         ><label class="field"
-          >所属科室<input value="全院" readonly aria-label="补录范围" />
-          <small>演示版按全院补录</small></label
+          >所属科室<input :value="currentUser?.deptName || '全院'" readonly aria-label="补录范围" />
+          <small>按当前账号授权范围提交</small></label
         >
       </div>
       <label class="field"

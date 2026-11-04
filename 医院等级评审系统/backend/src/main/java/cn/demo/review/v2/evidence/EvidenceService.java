@@ -42,7 +42,7 @@ public class EvidenceService {
     @Transactional
     public Map<String, Object> upload(AuthContext ctx, MultipartFile file, String ownerType, String ownerId,
                                       String title, String materialType, String validUntil, String requestId) {
-        ctx.require("review_office", "evidence_admin", "dept_head");
+        ctx.requirePermission("evidence.upload");
         if (!OWNER_TYPES.contains(ownerType)) throw V2Exception.badRequest("ownerType 取值不合法");
         requireTex(ownerId, "ownerId");
         requireTex(title, "title");
@@ -53,14 +53,7 @@ public class EvidenceService {
                 throw V2Exception.badRequest("validUntil 格式须为 YYYY-MM-DD");
             }
         }
-        if (ctx.has("dept_head")) {
-            if (!"task".equals(ownerType)) throw V2Exception.forbidden("科室负责人只能为本科室任务上传材料");
-            Map<String, Object> task = jdbc.query("SELECT dept_code FROM review_task WHERE id=? AND hospital_id=?",
-                    rs -> rs.next() ? Map.of("dept", String.valueOf(rs.getString(1))) : Map.of(),
-                    ownerId, ctx.hospitalId());
-            if (task.isEmpty()) throw V2Exception.notFound("任务不存在或不在可见范围");
-            ctx.requireDept(String.valueOf(task.get("dept")));
-        }
+        if(ctx.deptScoped() && !ownerVisible(ctx,ownerType,ownerId)){if(!ctx.accountSession())throw V2Exception.forbidden("只能操作本科室材料");throw V2Exception.notFound("材料关联对象不在当前授权范围");}
         if (file == null || file.isEmpty()) throw V2Exception.badRequest("附件不能为空");
         if (file.getSize() > MAX_BYTES) throw V2Exception.badRequest("附件最大5MiB");
 
@@ -182,7 +175,8 @@ public class EvidenceService {
 
     @Transactional
     public Map<String, Object> review(AuthContext ctx, String itemId, String decision, String note, String requestId) {
-        ctx.require("review_office", "evidence_admin");
+        ctx.requirePermission("evidence.review");
+        if(ctx.deptScoped()&&!readableByDept(ctx,itemId))throw V2Exception.notFound("材料不在当前授权范围");
         if (!Set.of("approved", "rejected").contains(decision)) {
             throw V2Exception.badRequest("decision 只能是 approved 或 rejected");
         }
@@ -222,10 +216,27 @@ public class EvidenceService {
     public record Download(String fileName, String contentType, byte[] bytes) {}
 
     private boolean readableByDept(AuthContext ctx, String itemId) {
-        List<String> depts = jdbc.query(
-                "SELECT t.dept_code FROM evidence_item i JOIN review_task t ON t.id=i.owner_id"
-                        + " WHERE i.id=? AND i.owner_type='task'", (rs, i) -> rs.getString(1), itemId);
-        return !depts.isEmpty() && ctx.deptCode().equals(depts.get(0));
+        List<Map<String,Object>> owners=jdbc.queryForList("SELECT owner_type,owner_id FROM evidence_item WHERE id=? AND hospital_id=?",itemId,ctx.hospitalId());
+        if(owners.isEmpty())return false;
+        return ownerVisible(ctx,String.valueOf(owners.get(0).get("owner_type")),String.valueOf(owners.get(0).get("owner_id")));
+    }
+
+    private boolean ownerVisible(AuthContext ctx,String type,String id) {
+        if(type.equals("task")) {
+            var rows=jdbc.queryForList("SELECT dept_code,clause_code FROM review_task WHERE id=? AND hospital_id=?",id,ctx.hospitalId());
+            return !rows.isEmpty() && Objects.equals(ctx.deptCode(),rows.get(0).get("dept_code")) && ctx.clauseVisible(String.valueOf(rows.get(0).get("clause_code")));
+        }
+        if(type.equals("improvement")&&!ctx.has("expert")) {
+            var rows=jdbc.queryForList("SELECT alert_id,source_type,source_id FROM v3_improvement WHERE id=? AND hospital_id=?",id,ctx.hospitalId());
+            if(rows.isEmpty())return false;var row=rows.get(0);
+            String origin=String.valueOf(row.get("source_type")), source=String.valueOf(row.get("source_id"));
+            if(row.get("alert_id")!=null){origin="alert";source=String.valueOf(row.get("alert_id"));}
+            String table=switch(origin){case "result"->"metric_result";case "task"->"review_task";case "alert"->"v3_alert";default->null;};
+            if(table==null)return false;
+            var depts=jdbc.queryForList("SELECT dept_code FROM "+table+" WHERE id=? AND hospital_id=?",source,ctx.hospitalId());
+            return !depts.isEmpty()&&Objects.equals(ctx.deptCode(),depts.get(0).get("dept_code"));
+        }
+        return false;
     }
 
     private Map<String, Object> item(String hospitalId, String itemId) {

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { hasPermission } from "../auth";
 import { computed, onMounted, ref } from "vue";
 import { errorText, v2, v2Download } from "./api";
 import { conclusionLabel, gradeLabel } from "./domain";
@@ -8,7 +9,7 @@ import type {
   V2ScoreRunDetail,
   V2ScoreRunSummary,
 } from "./types";
-import { notify, role } from "../store";
+import { notify } from "../store";
 
 const runs = ref<V2ScoreRunSummary[]>([]);
 const packages = ref<V2Package[]>([]);
@@ -25,7 +26,7 @@ const diff = ref<{
 } | null>(null);
 
 const form = ref({ versionId: "", cycleStart: 2023, cycleEnd: 2026 });
-const canRun = computed(() => role.value === "quality");
+const canRun = computed(() => hasPermission("assessment.write"));
 const years = [2023, 2024, 2025, 2026];
 
 async function loadReference() {

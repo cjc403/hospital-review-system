@@ -8,7 +8,8 @@ import org.springframework.stereotype.Service;
 import java.util.Set;
 
 /**
- * 身份解析。demo 走演示角色头（仅本机演示），prod 只接受真实令牌并拒绝演示头。
+ * 身份解析。默认使用本地可撤销账号会话；旧演示头仅限显式隔离模式。
+ * 真实统一身份适配尚未接入此账号体系，见 docs/auth-api-contract.md。
  */
 @Service
 public class AuthService {
@@ -17,15 +18,23 @@ public class AuthService {
 
     private final ReviewProfile profile;
     private final TokenAuthenticator authenticator;
+    private final cn.demo.review.auth.AccountService accounts;
+    private final boolean legacyHeaders;
 
-    public AuthService(ReviewProfile profile, TokenAuthenticator authenticator) {
+    public AuthService(ReviewProfile profile, TokenAuthenticator authenticator,cn.demo.review.auth.AccountService accounts,
+                       @org.springframework.beans.factory.annotation.Value("${review.auth.legacy-demo-headers:false}") boolean legacyHeaders) {
         this.profile = profile;
         this.authenticator = authenticator;
+        this.accounts=accounts;this.legacyHeaders=legacyHeaders;
     }
 
     public AuthContext resolve(HttpServletRequest request) {
-        if (profile.isProd()) return resolveProd(request);
-        return resolveDemo(request);
+        if(profile.isProd()&&request.getHeader(DEMO_ROLE_HEADER)!=null)throw V2Exception.profile("生产模式不接受演示角色头");
+        String bearer=request.getHeader("Authorization");
+        if(bearer!=null&&bearer.startsWith("Bearer "))return accounts.authenticate(bearer.substring(7));
+        if(profile.isProd())return resolveProd(request);
+        if(legacyHeaders)return resolveDemo(request);
+        throw V2Exception.unauthorized("请先登录");
     }
 
     private AuthContext resolveProd(HttpServletRequest request) {
@@ -58,7 +67,7 @@ public class AuthService {
                     Set.of("dept_head"), "demo");
             case "information" -> new AuthContext("demo-observer", DEMO_HOSPITAL, null,
                     Set.of("observer"), "demo");
-            default -> throw V2Exception.unauthorized("未知演示角色");
+            default -> throw request.getRequestURI().startsWith("/api/v") ? V2Exception.unauthorized("未知演示角色") : V2Exception.forbidden("未知演示角色");
         };
     }
 }

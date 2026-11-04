@@ -49,7 +49,7 @@ async function reset() {
       "/demo/reset",
       { confirm: resetText.value },
       "POST",
-      "演示业务数据已恢复初始状态",
+      "业务数据已恢复初始状态",
     )
   ) {
     resetting.value = false;
@@ -61,7 +61,7 @@ async function reset() {
   <div class="page-intro">
     <div>
       <h2>运行与审计</h2>
-      <p>查看数据批次、业务操作轨迹，管理本地演示状态。</p>
+      <p>查看数据批次、业务操作轨迹，管理本地状态。</p>
     </div>
     <button
       v-if="canWrite"
@@ -79,15 +79,15 @@ async function reset() {
     <div class="card environment-card">
       <span class="metric-icon teal"><ShieldCheck :size="22" /></span>
       <div>
-        <h3>本地演示环境</h3>
-        <p>合成数据 · 仅本机访问 · 演示角色切换</p>
+        <h3>本地环境</h3>
+        <p>数据管理 · 账号权限 · 操作审计</p>
       </div>
       <span class="badge badge-green">运行中</span>
     </div>
     <div class="card environment-card">
       <span class="metric-icon blue"><Database :size="22" /></span>
       <div>
-        <h3>演示业务持久化</h3>
+        <h3>业务持久化</h3>
         <p>
           {{ state!.batches.length }} 个批次 ·
           {{ state!.auditLogs.length }} 条审计记录
@@ -101,7 +101,7 @@ async function reset() {
     ><button :class="{ active: tab === 'audit' }" @click="tab = 'audit'">
       操作审计 <span class="count">{{ state!.auditLogs.length }}</span></button
     ><button :class="{ active: tab === 'settings' }" @click="tab = 'settings'">
-      演示维护
+      维护
     </button>
   </div>
   <section v-if="tab === 'batches'" class="card table-card">
@@ -200,13 +200,13 @@ async function reset() {
     <div class="info-strip">
       <Info
         :size="17"
-      />演示角色用于展示权限差异，不属于生产身份认证。当前系统不连接真实医院，不处理真实患者数据。
+      />账号权限与操作日志由系统统一管理。
     </div>
     <div class="maintenance-row">
       <div>
-        <h3>恢复初始演示数据</h3>
+        <h3>恢复初始数据</h3>
         <p>
-          清除当前演示业务修改，恢复预置指标、条款与样例任务。仅质控管理员可执行。
+          清除当前业务修改，恢复预置指标、条款与样例任务。仅质控管理员可执行。
         </p>
       </div>
       <button
@@ -218,14 +218,14 @@ async function reset() {
           resetText = '';
         "
       >
-        <RotateCcw :size="16" />重置演示数据</button
+        <RotateCcw :size="16" />重置数据</button
       ><span v-else class="hint">当前角色无维护权限</span>
     </div>
     <div class="maintenance-row">
       <div>
         <h3>数据与服务范围</h3>
         <p>
-          前端 127.0.0.1:18173 · API 127.0.0.1:18080<br />默认演示周期
+          前端 127.0.0.1:18173 · API 127.0.0.1:18080<br />默认周期
           2026-09，2026-10 可用于后续改进效果验证。
         </p>
       </div>
@@ -241,7 +241,7 @@ async function reset() {
         >计算周期<input v-model="period" type="month" required
       /></label>
       <p class="hint">
-        演示周期建议使用 2026-09 或 2026-10；后续周期用于验证持续改进效果。
+        周期建议使用 2026-09 或 2026-10；后续周期用于验证持续改进效果。
       </p>
       <div class="form-actions">
         <button type="button" class="button" @click="rerunning = false">
@@ -252,12 +252,12 @@ async function reset() {
       </div>
     </form></Modal
   >
-  <Modal v-if="resetting" title="确认重置演示数据" @close="resetting = false"
+  <Modal v-if="resetting" title="确认重置数据" @close="resetting = false"
     ><form @submit.prevent="reset">
       <div class="warning-strip">
         <Info :size="20" />
         <p>
-          此操作会恢复初始演示业务状态，当前补录、审核、抽查、试算和改进修改将被清除。
+          此操作会恢复初始业务状态，当前补录、审核、抽查、试算和改进修改将被清除。
         </p>
       </div>
       <label class="field"
@@ -274,7 +274,7 @@ async function reset() {
           class="button danger"
           :disabled="busy || resetText !== 'RESET_DEMO'"
         >
-          {{ busy ? "重置中…" : "确认恢复初始演示数据" }}
+          {{ busy ? "重置中…" : "确认恢复初始数据" }}
         </button>
       </div>
     </form></Modal

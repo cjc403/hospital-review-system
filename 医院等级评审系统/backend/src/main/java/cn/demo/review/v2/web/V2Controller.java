@@ -72,14 +72,14 @@ public class V2Controller {
     @PostMapping("/standards/import")
     public Map<String, Object> importPack(HttpServletRequest request, @RequestBody JsonNode body) {
         AuthContext ctx = AuthFilter.current(request);
-        ctx.require("review_office");
+        ctx.requirePermission("standard.write");
         return standards.importPack(ctx, body, requestId(request));
     }
 
     @PostMapping("/standards/versions/{versionId}/publish")
     public Map<String, Object> publish(HttpServletRequest request, @PathVariable String versionId) {
         AuthContext ctx = AuthFilter.current(request);
-        ctx.require("review_office");
+        ctx.requirePermission("standard.write");
         return standards.publish(ctx, versionId, requestId(request));
     }
 
@@ -87,7 +87,7 @@ public class V2Controller {
     public Map<String, Object> revision(HttpServletRequest request, @PathVariable String versionId,
                                        @RequestBody(required = false) JsonNode body) {
         AuthContext ctx = AuthFilter.current(request);
-        ctx.require("review_office");
+        ctx.requirePermission("standard.write");
         String note = body == null ? null : body.path("note").asText("");
         return standards.revision(ctx, versionId, requestId(request), note);
     }
@@ -247,7 +247,7 @@ public class V2Controller {
 
     @GetMapping("/integration/adapters")
     public Map<String, Object> integrationAdapters(HttpServletRequest request) {
-        AuthFilter.current(request).require("review_office", "indicator_admin");
+        AuthFilter.current(request).requirePermission("batch.read");
         return Map.of("items", adapters.list());
     }
 
@@ -255,7 +255,7 @@ public class V2Controller {
     public Map<String, Object> fetchFromAdapter(HttpServletRequest request, @PathVariable String code,
                                                 @RequestBody JsonNode body) {
         AuthContext ctx = AuthFilter.current(request);
-        ctx.require("review_office", "indicator_admin");
+        ctx.requirePermission("batch.write");
         String period = body.path("period").asText("");
         if (period.isBlank()) throw cn.demo.review.v2.V2Exception.badRequest("period 不能为空");
         var rows = adapters.fetch(code, period);
@@ -279,7 +279,7 @@ public class V2Controller {
     public Map<String, Object> audit(HttpServletRequest request,
                                      @RequestParam(defaultValue = "50") int limit) {
         AuthContext ctx = AuthFilter.current(request);
-        ctx.require("review_office", "leader");
+        if(ctx.accountSession())ctx.requirePermission("audit.read"); else ctx.require("review_office", "leader");
         return Map.of("items", audit.list(ctx.hospitalId(), limit));
     }
 

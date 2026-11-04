@@ -60,7 +60,7 @@ public class IngestionService {
 
     @Transactional
     public Map<String, Object> saveMapping(AuthContext ctx, JsonNode body, String requestId) {
-        ctx.require("review_office");
+        ctx.requirePermission("mapping.write");
         String sourceCode = text(body, "sourceCode");
         JsonNode fields = body.path("fields");
         if (!fields.isObject() || fields.path("metricCode").asText("").isBlank()) {
@@ -113,7 +113,7 @@ public class IngestionService {
 
     @Transactional
     public Map<String, Object> createBatch(AuthContext ctx, JsonNode body, String requestId) {
-        ctx.require("review_office", "indicator_admin");
+        ctx.requirePermission("batch.write");
         String sourceCode = text(body, "sourceCode");
         String period = text(body, "period");
         validatePeriod(period);
@@ -131,7 +131,7 @@ public class IngestionService {
 
     @Transactional
     public Map<String, Object> replay(AuthContext ctx, String batchId, String requestId) {
-        ctx.require("review_office", "indicator_admin");
+        ctx.requirePermission("batch.write");
         Map<String, Object> batch = batchRow(ctx, batchId);
         List<Map<String, Object>> sources = jdbc.query("SELECT code FROM data_source WHERE id=?",
                 (rs, i) -> Map.of("code", rs.getString(1)), batch.get("sourceId"));
@@ -272,7 +272,7 @@ public class IngestionService {
     /** 应用批次：计算全院与各科室结果，生成预警和血缘。 */
     @Transactional
     public Map<String, Object> apply(AuthContext ctx, String batchId, String requestId) {
-        ctx.require("review_office", "indicator_admin");
+        ctx.requirePermission("batch.write");
         Map<String, Object> batch = batchRow(ctx, batchId);
         String status = String.valueOf(batch.get("status"));
         if ("rejected".equals(status)) throw V2Exception.qualityBlocked("质量不合格批次不能应用");

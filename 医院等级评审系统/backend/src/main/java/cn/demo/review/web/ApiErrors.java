@@ -15,6 +15,7 @@ import java.util.Map;
 @RestControllerAdvice
 public class ApiErrors {
     private static final Logger log=LoggerFactory.getLogger(ApiErrors.class);
+    @ExceptionHandler(cn.demo.review.v2.V2Exception.class) ResponseEntity<?> authorization(cn.demo.review.v2.V2Exception e){return ResponseEntity.status(e.status).body(Map.of("message",e.getMessage()));}
     @ExceptionHandler(BusinessException.class) ResponseEntity<?> business(BusinessException e){return ResponseEntity.status(e.status()).body(Map.of("message",e.getMessage()));}
     @ExceptionHandler({HttpMessageNotReadableException.class,MethodArgumentTypeMismatchException.class,MissingServletRequestParameterException.class,MissingServletRequestPartException.class}) ResponseEntity<?> malformed(Exception e){return ResponseEntity.badRequest().body(Map.of("message","请求格式不正确或缺少必填字段"));}
     @ExceptionHandler(MaxUploadSizeExceededException.class) ResponseEntity<?> size(){return ResponseEntity.badRequest().body(Map.of("message","附件最大5MiB"));}

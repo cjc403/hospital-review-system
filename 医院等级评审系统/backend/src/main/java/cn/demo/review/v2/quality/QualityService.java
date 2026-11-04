@@ -53,7 +53,7 @@ public class QualityService {
 
     @Transactional
     public Map<String, Object> createBatch(AuthContext ctx, JsonNode body, String requestId) {
-        ctx.require("review_office", "indicator_admin");
+        ctx.requirePermission("batch.write");
         String sourceCode = text(body, "sourceCode");
         String period = text(body, "period");
         validatePeriod(period);
@@ -83,7 +83,7 @@ public class QualityService {
 
     @Transactional
     public Map<String, Object> replay(AuthContext ctx, String batchId, String requestId) {
-        ctx.require("review_office", "indicator_admin");
+        ctx.requirePermission("batch.write");
         Map<String, Object> source = batch(ctx, batchId);
         String sourceId = (String) source.get("sourceId");
         String period = (String) source.get("period");
@@ -193,7 +193,7 @@ public class QualityService {
 
     @Transactional
     public Map<String, Object> apply(AuthContext ctx, String batchId, String requestId) {
-        ctx.require("review_office", "indicator_admin");
+        ctx.requirePermission("batch.write");
         Map<String, Object> batch = batch(ctx, batchId);
         String status = (String) batch.get("status");
         if ("rejected".equals(status)) throw V2Exception.qualityBlocked("质量不合格批次不能应用，请修正后重新导入");

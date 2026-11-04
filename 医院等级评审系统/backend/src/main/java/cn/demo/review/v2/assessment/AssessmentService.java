@@ -69,7 +69,7 @@ public class AssessmentService {
 
     @Transactional
     public Map<String, Object> setConclusion(AuthContext ctx, String code, JsonNode body, String requestId) {
-        ctx.require("review_office");
+        ctx.requirePermission("assessment.write");
         String versionId = text(body, "versionId");
         String compliance = choice(body, "compliance", COMPLIANCE);
         String workflow = choice(body, "workflow", WORKFLOW);
@@ -100,7 +100,7 @@ public class AssessmentService {
     /** 条款抽查：用最新已应用事实对照标准目标线，偏差 ≥10% 记为错误条款。 */
     @Transactional
     public Map<String, Object> createSample(AuthContext ctx, JsonNode body, String requestId) {
-        ctx.require("review_office");
+        ctx.requirePermission("assessment.write");
         String period = text(body, "period");
         String versionId = latestPublishedVersion();
         if (versionId == null) throw V2Exception.conflict("尚无已发布的标准版本");

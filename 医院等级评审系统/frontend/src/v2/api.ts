@@ -1,4 +1,5 @@
-import { role } from "../store";
+import { present, displayText } from "../presentation";
+import { authHeaders, rejectUnauthorized, sessionToken } from "../auth";
 
 export class V2ApiError extends Error {
   constructor(
@@ -6,22 +7,22 @@ export class V2ApiError extends Error {
     public code: string,
     public status: number,
   ) {
-    super(message);
+    super(displayText(message));
     this.name = "V2ApiError";
   }
 }
 
 function headers(init?: RequestInit) {
-  const merged = new Headers(init?.headers);
-  merged.set("X-Demo-Role", role.value);
+  const merged = authHeaders(init?.headers);
   if (init?.body && !(init.body instanceof FormData)) {
     merged.set("Content-Type", "application/json");
   }
   return merged;
 }
 
-/** v0.2 接口调用：统一带演示角色，错误按契约错误码抛出。 */
+/** v0.2 接口调用：统一带登录会话，错误按契约错误码抛出。 */
 export async function v2<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const credential = sessionToken.value;
   let response: Response;
   try {
     response = await fetch(`/api/v2${path}`, { ...init, headers: headers(init) });
@@ -33,6 +34,7 @@ export async function v2<T>(path: string, init: RequestInit = {}): Promise<T> {
     );
   }
   if (!response.ok) {
+    rejectUnauthorized(response.status, credential);
     const body = (await response.json().catch(() => ({}))) as {
       message?: string;
       code?: string;
@@ -43,11 +45,12 @@ export async function v2<T>(path: string, init: RequestInit = {}): Promise<T> {
       response.status,
     );
   }
-  return response.json() as Promise<T>;
+  return present(await response.json()) as T;
 }
 
 /** 下载材料或报告，文件名从响应头取，失败同样按契约解析。 */
 export async function v2Download(path: string, fallback: string): Promise<void> {
+  const credential = sessionToken.value;
   let response: Response;
   try {
     response = await fetch(`/api/v2${path}`, { headers: headers() });
@@ -55,6 +58,7 @@ export async function v2Download(path: string, fallback: string): Promise<void> 
     throw new V2ApiError("下载连接失败，请检查本地服务。", "network_error", 0);
   }
   if (!response.ok) {
+    rejectUnauthorized(response.status, credential);
     const body = (await response.json().catch(() => ({}))) as { message?: string };
     throw new V2ApiError(body.message || "下载失败", "download_failed", response.status);
   }

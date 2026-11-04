@@ -63,7 +63,7 @@ public class MetricDefinitionService {
 
     @Transactional
     public Map<String, Object> create(AuthContext ctx, JsonNode body, String requestId) {
-        ctx.require("review_office");
+        ctx.requirePermission("standard.write");
         String versionId = text(body, "versionId");
         String code = text(body, "code");
         String name = text(body, "name");

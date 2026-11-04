@@ -58,7 +58,7 @@ class V3ApiTest {
     void start() throws Exception {
         root = Files.createTempDirectory("hospital-v3-");
         context = new SpringApplicationBuilder(DemoApplication.class).run(
-                "--server.port=0", "--demo.rich-seed.enabled=false",
+                "--server.port=0", "--review.auth.legacy-demo-headers=true", "--demo.rich-seed.enabled=false",
                 "--spring.datasource.url=jdbc:h2:file:" + root.resolve("v3state").toString().replace('\\', '/')
                         + ";DB_CLOSE_ON_EXIT=FALSE",
                 "--review.storage-dir=" + root.resolve("v3-evidence"),
@@ -66,7 +66,7 @@ class V3ApiTest {
                 "--spring.main.banner-mode=off");
         base = "http://127.0.0.1:" + context.getEnvironment().getProperty("local.server.port") + "/api/v3";
         prodContext = new SpringApplicationBuilder(DemoApplication.class).run(
-                "--server.port=0", "--demo.rich-seed.enabled=false",
+                "--server.port=0", "--review.auth.legacy-demo-headers=true", "--demo.rich-seed.enabled=false",
                 "--review.profile=prod",
                 "--spring.datasource.url=jdbc:h2:mem:v3prod;DB_CLOSE_DELAY=-1",
                 "--review.storage-dir=" + root.resolve("prod-evidence"),

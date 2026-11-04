@@ -15,7 +15,7 @@ async function fixture(t) {
     if (req.url === '/api/fail') { res.writeHead(409, { 'Content-Type': 'application/json' }); res.end('{"message":"不能重复审核"}'); return; }
     let body = '';
     req.on('data', (chunk) => body += chunk);
-    req.on('end', () => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ path: req.url, role: req.headers['x-demo-role'], body })); });
+    req.on('end', () => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ path: req.url, role: req.headers['x-demo-role'], authorization:req.headers.authorization, body })); });
   });
   await new Promise(resolve => upstream.listen(0, '127.0.0.1', resolve));
   const server = createDemoServer({ root, backendPort: upstream.address().port });
@@ -38,8 +38,8 @@ test('serves Chinese SPA and nested page routes while missing assets return 404'
 
 test('forwards API body, query, role and upstream validation errors', async t => {
   const base = await fixture(t);
-  const response = await fetch(base + '/api/manual-values?period=2026-09', { method: 'POST', headers: { 'X-Demo-Role': 'quality', 'Content-Type': 'application/json' }, body: '{"value":2}' });
-  assert.deepEqual(await response.json(), { path: '/api/manual-values?period=2026-09', role: 'quality', body: '{"value":2}' });
+  const response = await fetch(base + '/api/manual-values?period=2026-09', { method: 'POST', headers: { 'X-Demo-Role': 'quality', 'Authorization':'Bearer synthetic-session-token', 'Content-Type': 'application/json' }, body: '{"value":2}' });
+  assert.deepEqual(await response.json(), { path: '/api/manual-values?period=2026-09', role: 'quality', authorization:'Bearer synthetic-session-token', body: '{"value":2}' });
   const rejected = await fetch(base + '/api/fail');
   assert.equal(rejected.status, 409);
   assert.equal((await rejected.json()).message, '不能重复审核');

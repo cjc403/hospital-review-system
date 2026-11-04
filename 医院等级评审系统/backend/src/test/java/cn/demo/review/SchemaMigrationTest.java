@@ -22,13 +22,13 @@ class SchemaMigrationTest {
     void appliesV2SchemaUnderPostgresCompatibilityMode() throws Exception {
         Path root = Files.createTempDirectory("hospital-pgmode-");
         try (ConfigurableApplicationContext context = new SpringApplicationBuilder(DemoApplication.class).run(
-                "--server.port=0", "--demo.rich-seed.enabled=false",
+                "--server.port=0", "--review.auth.legacy-demo-headers=true", "--demo.rich-seed.enabled=false",
                 "--spring.datasource.url=jdbc:h2:mem:pgmode;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
                 "--review.storage-dir=" + root.resolve("evidence"),
                 "--demo.upload-dir=" + root.resolve("uploads"),
                 "--spring.main.banner-mode=off")) {
             SchemaMigrator migrator = context.getBean(SchemaMigrator.class);
-            assertEquals(List.of(2, 3, 4, 5, 6, 7, 8), migrator.appliedVersions(), "迁移应按版本递增且只应用一次");
+            assertEquals(List.of(2, 3, 4, 5, 6, 7, 8, 9), migrator.appliedVersions(), "迁移应按版本递增且只应用一次");
 
             JdbcTemplate jdbc = context.getBean(JdbcTemplate.class);
             Integer columns = jdbc.queryForObject(

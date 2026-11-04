@@ -1,3 +1,4 @@
+import { acceptSession, clearSession } from "./auth";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { busy, loadWorkspace, mutate, notice, role, workspace, reopenImprovement } from "./store";
 import { ApiError, request } from "./api";
@@ -33,12 +34,14 @@ const json = (body: unknown, status = 200) =>
 
 beforeEach(() => {
   vi.useFakeTimers();
+  acceptSession({token:"test-session",user:{id:"quality",username:"review",displayName:"评审办",roleCode:"review_office",roleName:"评审办管理员",hospitalId:"H001",hospitalName:"合成医院",deptCode:"",deptName:"",permissions:["legacy.write"],legacyRole:"quality",clauseCodes:[],status:"active"}});
   busy.value = false;
   role.value = "quality";
   workspace.value = null;
   notice.value = null;
 });
 afterEach(() => {
+  clearSession();
   vi.unstubAllGlobals();
   vi.clearAllTimers();
   vi.useRealTimers();
@@ -57,7 +60,7 @@ describe("真实接口边界与工作区刷新", () => {
     expect(JSON.parse(calls[0]!.options.body as string)).toEqual({status:"reopen"});
     expect(calls[1]!.path).toBe("/api/workspace");
   });
-  it("写入发送角色与JSON，成功后重新读取后端工作区", async () => {
+  it("写入发送会话与JSON，成功后重新读取后端工作区", async () => {
     const calls: { path: string; options: RequestInit }[] = [];
     vi.stubGlobal("fetch", async (path: string, options: RequestInit) => {
       calls.push({ path, options });
@@ -72,9 +75,8 @@ describe("真实接口边界与工作区刷新", () => {
       "/api/manual-values",
       "/api/workspace",
     ]);
-    expect((calls[0]!.options.headers as Headers).get("X-Demo-Role")).toBe(
-      "quality",
-    );
+    expect((calls[0]!.options.headers as Headers).get("Authorization")).toBe("Bearer test-session");
+    expect((calls[0]!.options.headers as Headers).has("X-Demo-Role")).toBe(false);
     expect((calls[0]!.options.headers as Headers).get("Content-Type")).toBe(
       "application/json",
     );
@@ -82,7 +84,8 @@ describe("真实接口边界与工作区刷新", () => {
       value: 0.35,
       note: "合成补录",
     });
-    expect(workspace.value).toEqual(fixture);
+    expect(workspace.value).toEqual({ ...fixture, meta: { ...fixture.meta, hospitalName: "医院" } });
+    expect(fixture.meta.hospitalName).toBe("合成医院");
     expect(busy.value).toBe(false);
   });
 
@@ -106,10 +109,11 @@ describe("真实接口边界与工作区刷新", () => {
     expect(notice.value?.error).toBe(true);
   });
 
-  it("较慢的旧角色请求不能覆盖新角色数据", async () => {
+  it("较慢的旧工作区请求不能覆盖新请求数据", async () => {
     let release: (value: Response) => void = () => {};
-    vi.stubGlobal("fetch", (_path: string, options: RequestInit) => {
-      return (options.headers as Headers).get("X-Demo-Role") === "quality"
+    let calls = 0;
+    vi.stubGlobal("fetch", () => {
+      return ++calls === 1
         ? new Promise<Response>((resolve) => (release = resolve))
         : Promise.resolve(
             json({

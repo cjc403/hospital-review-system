@@ -15,7 +15,7 @@ import java.util.Map;
 
 /** v2 错误体：{code,message,requestId,details}。消息不含内部路径与堆栈。 */
 @org.springframework.core.annotation.Order(org.springframework.core.Ordered.HIGHEST_PRECEDENCE)
-@RestControllerAdvice(basePackages = {"cn.demo.review.v2.web", "cn.demo.review.v3.web"})
+@RestControllerAdvice(basePackages = {"cn.demo.review.v2.web", "cn.demo.review.v3.web", "cn.demo.review.auth"})
 public class V2Errors {
     private static final Logger log = LoggerFactory.getLogger(V2Errors.class);
 

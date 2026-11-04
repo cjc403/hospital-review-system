@@ -158,7 +158,7 @@ async function reopen() {
             <th>改进指标 / 来源</th>
             <th>责任人</th>
             <th>截止日期</th>
-            <th>基线 → 演示目标</th>
+            <th>基线 → 目标</th>
             <th>最新周期值</th>
             <th>进度</th>
             <th>佐证</th>
@@ -222,7 +222,7 @@ async function reopen() {
           >截止日期<input v-model="createForm.dueDate" type="date" required
         /></label>
       </div>
-      <p class="hint">来源标记：红灯预警。后台将保存创建时的基线与演示目标。</p>
+      <p class="hint">来源标记：红灯预警。后台将保存创建时的基线与目标。</p>
       <div class="form-actions">
         <button type="button" class="button" @click="creating = false">
           取消</button
@@ -246,7 +246,7 @@ async function reopen() {
         ><strong>{{ formatValue(selected.baseline, unit) }}</strong>
       </div>
       <div>
-        <small>演示目标</small
+        <small>目标</small
         ><strong>{{ formatValue(selected.target, unit) }}</strong>
       </div>
       <div>

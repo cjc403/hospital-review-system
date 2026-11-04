@@ -1,3 +1,5 @@
+import { present, displayText } from "./presentation";
+import { authHeaders, rejectUnauthorized, sessionToken } from "./auth";
 import type { Role } from "./types";
 
 export class ApiError extends Error {
@@ -5,20 +7,21 @@ export class ApiError extends Error {
     message: string,
     public status: number,
   ) {
-    super(message);
+    super(displayText(message));
     this.name = "ApiError";
   }
 }
 
+/** Legacy role argument is retained for callers; only the server session authorizes access. */
 export async function request<T>(
   path: string,
-  role: Role,
+  _legacyRole: Role,
   options: RequestInit = {},
 ): Promise<T> {
-  const headers = new Headers(options.headers);
-  headers.set("X-Demo-Role", role);
+  const headers = authHeaders(options.headers);
   if (options.body && !(options.body instanceof FormData))
     headers.set("Content-Type", "application/json");
+  const credential = sessionToken.value;
   let response: Response;
   try {
     response = await fetch(`/api${path}`, { ...options, headers });
@@ -29,6 +32,7 @@ export async function request<T>(
     );
   }
   if (!response.ok) {
+    rejectUnauthorized(response.status, credential);
     let message = `请求失败（${response.status}）`;
     try {
       message = (await response.json()).message || message;
@@ -37,21 +41,23 @@ export async function request<T>(
     }
     throw new ApiError(message, response.status);
   }
-  return response.json() as Promise<T>;
+  return present(await response.json()) as T;
 }
 
 export async function downloadFile(
   path: string,
-  role: Role,
+  _legacyRole: Role,
   fallbackName: string,
 ): Promise<void> {
+  const credential = sessionToken.value;
   let response: Response;
   try {
-    response = await fetch(`/api${path}`, { headers: { "X-Demo-Role": role } });
+    response = await fetch(`/api${path}`, { headers: authHeaders() });
   } catch {
     throw new ApiError("下载连接失败，请检查本地服务。", 0);
   }
   if (!response.ok) {
+    rejectUnauthorized(response.status, credential);
     const body = await response.json().catch(() => ({}));
     throw new ApiError(body.message || "文件下载失败", response.status);
   }

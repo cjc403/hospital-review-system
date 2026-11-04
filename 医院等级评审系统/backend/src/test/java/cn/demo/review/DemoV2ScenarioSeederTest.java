@@ -14,7 +14,7 @@ class DemoV2ScenarioSeederTest {
     void seedsTasksEvidenceBatchesScoresAndReports() throws Exception {
         var root = Files.createTempDirectory("hospital-rich-v2-");
         try (ConfigurableApplicationContext context = new SpringApplicationBuilder(DemoApplication.class).run(
-                "--server.port=0",
+                "--server.port=0", "--review.auth.legacy-demo-headers=true",
                 "--demo.rich-seed.enabled=true",
                 "--spring.datasource.url=jdbc:h2:file:" + root.resolve("state").toString().replace('\\', '/')
                         + ";DB_CLOSE_ON_EXIT=FALSE",

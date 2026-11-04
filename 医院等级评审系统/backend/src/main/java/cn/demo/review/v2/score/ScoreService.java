@@ -41,7 +41,7 @@ public class ScoreService {
 
     @Transactional
     public Map<String, Object> create(AuthContext ctx, JsonNode body, String requestId) {
-        ctx.require("review_office");
+        ctx.requirePermission("report.write");
         String versionId = body.path("versionId").asText("");
         if (versionId.isBlank()) throw V2Exception.badRequest("versionId 不能为空");
         int start = body.path("cycleStart").asInt(0);
@@ -294,7 +294,7 @@ public class ScoreService {
     }
 
     public byte[] report(AuthContext ctx, String runId, String requestId) throws Exception {
-        ctx.require("review_office", "leader", "observer", "indicator_admin", "evidence_admin");
+        if(ctx.accountSession())ctx.requirePermission("report.read"); else ctx.require("review_office", "leader", "observer", "indicator_admin", "evidence_admin");
         Map<String, Object> run = get(ctx, runId);
         Map<String, Object> snapshot = parseSnapshot((String) runRow(ctx, runId).get("snapshot"));
         byte[] bytes = V2DocxReport.render(run, snapshot);

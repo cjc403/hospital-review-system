@@ -22,7 +22,7 @@ class ApiTest {
     Path root; String base;
     @BeforeAll void start() throws Exception { root=Files.createTempDirectory("hospital-api-"); open(); }
     void open() {
-        context=new SpringApplicationBuilder(DemoApplication.class).run("--server.port=0", "--demo.rich-seed.enabled=false","--spring.datasource.url=jdbc:h2:file:"+root.resolve("state").toString().replace('\\','/')+";DB_CLOSE_ON_EXIT=FALSE","--demo.upload-dir="+root.resolve("uploads"),"--spring.main.banner-mode=off");
+        context=new SpringApplicationBuilder(DemoApplication.class).run("--server.port=0", "--review.auth.legacy-demo-headers=true", "--demo.rich-seed.enabled=false","--spring.datasource.url=jdbc:h2:file:"+root.resolve("state").toString().replace('\\','/')+";DB_CLOSE_ON_EXIT=FALSE","--demo.upload-dir="+root.resolve("uploads"),"--spring.main.banner-mode=off");
         base="http://127.0.0.1:"+context.getEnvironment().getProperty("local.server.port")+"/api";
     }
     @AfterAll void stop() { if(context!=null) context.close(); }

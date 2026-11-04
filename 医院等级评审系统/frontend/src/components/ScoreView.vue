@@ -38,7 +38,7 @@ async function adopt() {
       `/score-runs/${selected.value.id}/adopt`,
       {},
       "POST",
-      "已采用本次演示试算快照",
+      "已采用本次试算快照",
     ))
   )
     adopting.value = false;
@@ -51,7 +51,7 @@ async function adopt() {
       <p>选择年度范围，保存一次可追溯的样例试算和报告快照。</p>
     </div>
     <span class="badge badge-yellow"
-      ><AlertTriangle :size="13" />仅供演示试算</span
+      ><AlertTriangle :size="13" />仅供试算</span
     >
   </div>
   <div class="warning-strip">
@@ -61,7 +61,7 @@ async function adopt() {
       <p>
         当前仅 {{ state!.indicators.length }} 项样例，未覆盖
         {{ state!.meta.totalMonitoringClauses }} 条完整监测条款及 60%
-        覆盖要求。所有等次、采用结果和导出报告均明确标记“演示试算”。
+        覆盖要求。所有等次、采用结果和导出报告均明确标记“试算”。
       </p>
     </div>
   </div>
@@ -110,14 +110,14 @@ async function adopt() {
   <template v-else
     ><section class="card score-result">
       <div>
-        <span class="eyebrow">DEMO ASSESSMENT · 保存快照</span>
+        <span class="eyebrow">ASSESSMENT · 保存快照</span>
         <h2>{{ label(selected.grade) }}</h2>
         <p>
           {{ selected.cycleStart }}—{{ selected.cycleEnd }} 年 ·
           {{ formatDate(selected.createdAt) }}
         </p>
         <span class="subtle-tag">{{
-          selected.adopted ? "当前已采用 · 演示用途" : "待采用 · 演示用途"
+          selected.adopted ? "当前已采用 · 用途" : "待采用 · 用途"
         }}</span>
       </div>
       <div class="score-ratio">
@@ -134,7 +134,7 @@ async function adopt() {
           @click="
             download(
               `/reports/${selected.id}`,
-              `医院评审_演示试算_${selected.id}.docx`,
+              `医院评审_试算_${selected.id}.docx`,
             )
           "
         >
@@ -231,13 +231,13 @@ async function adopt() {
   >
   <Modal
     v-if="adopting && selected"
-    title="采用演示试算快照"
+    title="采用试算快照"
     @close="adopting = false"
     ><div class="confirm-content">
       <CheckCheck :size="36" />
       <h3>采用 {{ selected.cycleStart }}—{{ selected.cycleEnd }} 样例试算</h3>
       <p>
-        采用后保留计算、前置结论与抽查结果快照，导出报告绑定本次数据。该操作只用于演示，不代表正式等次。
+        采用后保留计算、前置结论与抽查结果快照，导出报告绑定本次数据。该操作只用于，不代表正式等次。
       </p>
     </div>
     <div class="form-actions">

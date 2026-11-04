@@ -1,14 +1,15 @@
 <script setup lang="ts">
+import { hasPermission, currentUser } from "../auth";
 import { computed, onMounted, ref } from "vue";
 import { errorText, v3 } from "./api";
 import { formatValue, formulaLabels, lightBadge, lightLabels, lineagePath } from "./domain";
 import type { V3Alert, V3Definition, V3Drilldown, V3Lineage, V3Result } from "./types";
-import { notify, role, workspace } from "../store";
+import { notify, workspace } from "../store";
 
 const results = ref<V3Result[]>([]);
 const definitions = ref<V3Definition[]>([]);
 const definitionVersion = ref("");
-const filters = ref({ period: workspace.value?.meta.period || "2026-09", metricCode: "", deptCode: "", chapterCode: "" });
+const filters = ref({ period: workspace.value?.meta.period || "2026-09", metricCode: "", deptCode: currentUser.value?.deptCode || "", chapterCode: "" });
 const loading = ref(false);
 const error = ref("");
 const selected = ref<V3Result | null>(null);
@@ -19,7 +20,7 @@ const showDefinitions = ref(false);
 const alerts = ref<V3Alert[]>([]);
 const improving = ref(false);
 const improveDraft = ref({ rootCause: "", action: "", owner: "", dueDate: "2026-12-31" });
-const canWrite = computed(() => role.value === "quality");
+const canWrite = computed(() => hasPermission("improvement.write"));
 
 const metrics = computed(() => {
   const seen = new Map<string, string>();
@@ -47,6 +48,7 @@ async function loadDefinitions() {
 }
 
 async function loadAlerts() {
+  if (!hasPermission("alert.read")) return;
   try {
     const result = await v3<{ items: V3Alert[] }>("/alerts?limit=100");
     alerts.value = result.items;
@@ -157,7 +159,9 @@ onMounted(async () => {
             <option value="">全部指标</option>
             <option v-for="[code, name] in metrics" :key="code" :value="code">{{ code }} · {{ name }}</option>
           </select>
-          <select v-model="filters.deptCode" aria-label="科室">
+          <select v-model="filters.deptCode" aria-label="科室" :disabled="!!currentUser?.deptCode">
+            <option v-if="currentUser?.deptCode" :value="currentUser.deptCode">{{ currentUser.deptName }}</option>
+            <template v-else>
             <option value="">全部科室</option>
             <option value="ALL">全院</option>
             <option value="CARD">心血管内科</option>
@@ -166,6 +170,7 @@ onMounted(async () => {
             <option value="ORTH">骨科</option>
             <option value="RESP">呼吸内科</option>
             <option value="GYNE">妇产科</option>
+            </template>
           </select>
           <select v-model="filters.chapterCode" aria-label="章节">
             <option value="">全部章节</option>
@@ -271,17 +276,17 @@ onMounted(async () => {
         </table>
       </div>
       <p class="hint">
-        {{ drilldown.members.note || "当前角色不展示合成成员样本" }}
+        {{ drilldown.members.note || "当前角色不展示成员样本" }}
       </p>
-      <div v-if="drilldown.members.items.length" class="table-wrap results-scroll">
+      <div v-if="hasPermission('member.read') && drilldown.members.items.length" class="table-wrap results-scroll">
         <table>
-          <thead><tr><th>合成标识</th><th>归期日期</th><th>科室</th><th>样本角色</th></tr></thead>
+          <thead><tr><th>标识</th><th>归期日期</th><th>科室</th><th>样本角色</th></tr></thead>
           <tbody><tr v-for="member in drilldown.members.items" :key="member.inpatientNo">
             <td>{{ member.inpatientNo }}</td><td>{{ member.dischargeDate }}</td>
             <td>{{ member.deptCode }}</td><td>分母成员样本</td>
           </tr></tbody>
         </table>
-        <p class="hint">共 {{ drilldown.members.total }} 个分母样本，展示最多 20 条；全部为合成数据。</p>
+        <p class="hint">共 {{ drilldown.members.total }} 个分母样本，展示最多 20 条。</p>
       </div>
       <div v-if="canWrite" class="inline-filters">
         <button class="button-small" @click="improving = !improving">

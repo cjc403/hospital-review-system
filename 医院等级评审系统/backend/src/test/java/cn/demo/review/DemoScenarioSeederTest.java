@@ -15,7 +15,7 @@ class DemoScenarioSeederTest {
     @Test void upgradesLegacyDatabaseWithMultipleDefinitionVersionsAndCustomMetrics() throws Exception {
         var root = Files.createTempDirectory("hospital-rich-upgrade-");
         try (var context = new SpringApplicationBuilder(DemoApplication.class).run(
-                "--server.port=0", "--demo.rich-seed.enabled=false",
+                "--server.port=0", "--review.auth.legacy-demo-headers=true", "--demo.rich-seed.enabled=false",
                 "--spring.datasource.url=jdbc:h2:mem:upgrade-"+UUID.randomUUID(),
                 "--review.storage-dir="+root.resolve("evidence"), "--demo.upload-dir="+root.resolve("uploads"))) {
             var jdbc=context.getBean(JdbcTemplate.class);
@@ -35,7 +35,7 @@ class DemoScenarioSeederTest {
     void productionProfileNeverCreatesRichFixturesEvenWhenEnabled() throws Exception {
         var root = Files.createTempDirectory("hospital-prod-no-rich-");
         try (var context = new SpringApplicationBuilder(DemoApplication.class).run(
-                "--server.port=0", "--review.profile=prod", "--demo.rich-seed.enabled=true",
+                "--server.port=0", "--review.auth.legacy-demo-headers=true", "--review.profile=prod", "--demo.rich-seed.enabled=true",
                 "--spring.datasource.url=jdbc:h2:mem:prod-no-rich-" + UUID.randomUUID(),
                 "--review.storage-dir=" + root.resolve("evidence"),
                 "--demo.upload-dir=" + root.resolve("uploads"), "--spring.main.banner-mode=off")) {
@@ -52,7 +52,7 @@ class DemoScenarioSeederTest {
                 + ";DB_CLOSE_ON_EXIT=FALSE";
         int before;
         try (ConfigurableApplicationContext context = new SpringApplicationBuilder(DemoApplication.class).run(
-                "--server.port=0", "--spring.datasource.url=" + db,
+                "--server.port=0", "--review.auth.legacy-demo-headers=true", "--spring.datasource.url=" + db,
                 "--demo.rich-seed.enabled=true",
                 "--review.storage-dir=" + root.resolve("evidence"),
                 "--demo.upload-dir=" + root.resolve("uploads"),
@@ -67,7 +67,7 @@ class DemoScenarioSeederTest {
             before = count(jdbc, "SELECT COUNT(*) FROM ingestion_batch WHERE hospital_id='H001'");
         }
         try (ConfigurableApplicationContext context = new SpringApplicationBuilder(DemoApplication.class).run(
-                "--server.port=0", "--spring.datasource.url=" + db,
+                "--server.port=0", "--review.auth.legacy-demo-headers=true", "--spring.datasource.url=" + db,
                 "--demo.rich-seed.enabled=true",
                 "--review.storage-dir=" + root.resolve("evidence"),
                 "--demo.upload-dir=" + root.resolve("uploads"),

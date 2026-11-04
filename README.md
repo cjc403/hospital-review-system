@@ -12,14 +12,22 @@
 | v0.2 | 生产形态骨架 | 标准包/版本/条款树、任务状态机与幂等、材料版本与 SHA-256、质量批次门、试算快照、审计与请求关联 ID、`demo/prod` 身份边界 |
 | v3 | 数据中台与指标引擎 | 受控公式（ratio / weighted_ratio / month_avg / year_end_snapshot / drg_formula / trend）、字段映射与编码清洗、批次阻断与重放、结果下钻与血缘、预警状态机、PDCA 整改、证据版本与报告快照 |
 
-三条链路并存且互不破坏：`/api`（v0.1）、`/api/v2`、`/api/v3`。
+三条链路使用同一账号会话和服务端授权，业务状态按版本保留：`/api`（v0.1）、`/api/v2`、`/api/v3`。
+
+## 最新进展（2026-11-04）
+
+- 已增加账号登录、九类角色和32个预置账号，权限按医院、实际科室和专家授权条款在服务端过滤。
+- 支持个人工作台、账号创建/编辑/启停/重置、本人改密、刷新恢复和退出。停用、改权、改密后旧会话失效。
+- 统一v1/v2/v3请求及下载的Bearer认证；正常启动不再以`X-Demo-Role`切换身份。
+- 界面统一正式业务名称，清理重复的环境标注；业务数据与历史记录保留。
+- [11月5日组会汇报PPT](汇报材料/2026-11-05/成品/医院等级评审系统_组会工作汇报_2026-11-05.pptx)：10页可编辑内容，附逐页讲解备注。
 
 ## 技术栈
 
-- 后端：Java 17、Spring Boot 3.5、Spring JDBC、H2（本地）/ PostgreSQL（生产形态）
-- 前端：Vue 3 + Vite + TypeScript，无 UI 框架，自绘组件与图表
+- 后端：Java 17、Spring Boot 3.5、Spring JDBC、H2（本地），附 PostgreSQL 迁移脚本
+- 前端：Vue 3 + Vite + TypeScript + ECharts
 - 测试：JUnit 5（后端）、Vitest（前端）、Node 原生测试与集成检查脚本
-- 迁移：追加式迁移（版本 2 → 8），H2 与 PostgreSQL 同构 DDL
+- 迁移：追加式迁移（版本 2 → 9），H2 与 PostgreSQL 同构 DDL
 
 ## 目录结构
 
@@ -52,20 +60,30 @@ powershell -ExecutionPolicy Bypass -File 启动演示.ps1 -SkipBuild -NoBrowser
 - 后端健康检查：http://127.0.0.1:18080/api/health
 - 数据文件：`医院等级评审系统/backend/.runtime/data/demo.mv.db`（不进版本库）
 
+## 登录与角色
+
+先打开前端登录页。完整业务流程使用 `review.admin`，账号管理使用 `sys.admin`，院级只读使用 `leader.demo`。六科室账号、职能质控、专家、数据管理和审计角色见[账号指南](医院等级评审系统/docs/账号登录与角色演示指南.md)。
+
+全部32个本地合成账号的初始密码统一为 `cjc2003822cjc`，用于本项目本地样例；`prod`不生成这些账号，并拒绝演示账号令牌和演示角色头。改密不会被重启覆盖。真实院内统一身份仍须另外对接。
+
 ## 测试与验证
 
+在仓库根目录运行完整门槛：
+
 ```powershell
-cd 医院等级评审系统/backend ; mvn.cmd -o -B -ntp test      # 后端单元与接口测试
-cd 医院等级评审系统/frontend ; npm.cmd test -- --run        # 前端逻辑测试
-node 医院等级评审系统/scripts/integration-check.mjs         # 端到端集成检查（需服务已启动）
 powershell -ExecutionPolicy Bypass -File 医院等级评审系统/scripts/verify.ps1
 ```
 
-当前状态：后端 94 项、前端 36 项通过；集成检查覆盖 v1/v2/v3 三段链路；PostgreSQL 迁移与备份恢复在临时隔离集群验证。
+门槛包含后端打包与测试、前端测试与构建、静态服务测试，以及在临时数据库执行的集成检查。单独执行隔离集成时，在工程目录运行 `node scripts/integration-check-isolated.mjs`，需要已有后端JAR。
+
+2026-11-04重新执行完整门槛：后端105项、前端52项、服务测试3项和隔离集成27组全部通过，构建成功。实际命令见交接文档第7节。目标PostgreSQL上的最新V9迁移、真实数据源及院内统一身份尚未验证。
 
 ## 文档索引
 
 - `交接文档.md`：进度、决策、验证记录与已知限制（**先读这个**）
+- [账号与权限契约](医院等级评审系统/docs/auth-api-contract.md)：当前登录与权限约定
+- [账号和角色指南](医院等级评审系统/docs/账号登录与角色演示指南.md)：账号清单与组会路线
+- [本次更新说明](医院等级评审系统/docs/releases/2026-11-04-account-roles.md)
 - `医院等级评审系统/docs/next-api-contract.md`：v2 接口契约
 - `医院等级评审系统/docs/v3-api-contract.md`：v3 接口契约
 - `医院等级评审系统/docs/demo-data-guide.md`：演示数据场景与统计

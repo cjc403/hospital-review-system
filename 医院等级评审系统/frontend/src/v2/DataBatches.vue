@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import { hasPermission } from "../auth";
 import { computed, onMounted, ref } from "vue";
 import { errorText, v2 } from "./api";
 import { parseDataRows } from "./domain";
 import type { V2Batch, V2BatchDetail } from "./types";
-import { notify, role } from "../store";
+import { notify } from "../store";
 
 const sources = ref<{ code: string; name: string; kind: string }[]>([]);
 const batches = ref<V2Batch[]>([]);
@@ -18,7 +19,7 @@ const form = ref({
   csv: "i01,960,2000,0.48\ni02,1140,2000,57",
 });
 
-const canWrite = computed(() => role.value === "quality");
+const canWrite = computed(() => hasPermission("batch.write"));
 
 async function loadSources() {
   try {
@@ -228,14 +229,14 @@ onMounted(async () => {
         </div>
         <div class="inline-filters">
           <button
-            v-if="detail.batch.status === 'validated'"
+            v-if="canWrite && detail.batch.status === 'validated'"
             class="button primary"
             :disabled="busy"
             @click="apply"
           >
             应用该批次
           </button>
-          <button class="button" :disabled="busy" @click="replay">重放</button>
+          <button v-if="canWrite" class="button" :disabled="busy" @click="replay">重放</button>
         </div>
       </div>
 

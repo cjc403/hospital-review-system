@@ -108,7 +108,7 @@ export function scoreReasonLabel(code: string): string {
     last_year_fail: "最后一年未达标",
     not_applicable: "不适用",
     conform: "符合",
-    below_target: "未达到演示目标",
+    below_target: "未达到目标",
     no_data: "无有效数据",
     all_or_nothing: "中位数与末年判定",
     interval_trend: "区间趋势判定",

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { hasPermission } from "../auth";
 import { computed, ref, watch } from "vue";
 import { ClipboardCheck, Plus, Info } from "lucide-vue-next";
 import { workspace as state, busy, canWrite, mutate, role } from "../store";
@@ -14,7 +15,7 @@ const resultLabels: Record<string, string> = {
   ok: "一致",
   matched: "一致",
 };
-const canViewCases = computed(() => role.value === "quality" || role.value === "department");
+const canViewCases = computed(() => hasPermission("member.read"));
 const tab = ref(canViewCases.value ? "reconcile" : "samples");
 watch(canViewCases, allowed => { if (!allowed) { tab.value = "samples"; selected.value = null; } });
 const filter = ref("ALL");

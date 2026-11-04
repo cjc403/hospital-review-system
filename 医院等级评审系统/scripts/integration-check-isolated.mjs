@@ -52,7 +52,10 @@ function waitForHealthy(url, child) {
         const response = await fetch(url);
         if (response.ok) {
           // Tomcat 可先于 ApplicationRunner 就绪；必须等场景事务提交后再验收。
-          const reports = await fetch(url.replace('/api/health', '/api/v3/reports'), { headers: { 'X-Demo-Role': 'quality' } });
+          const login = await fetch(url.replace('/api/health','/api/auth/login'), {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'review.admin',password:'cjc2003822cjc'})});
+          if(!login.ok)throw new Error('Accounts not ready');
+          const session=await login.json();
+          const reports = await fetch(url.replace('/api/health', '/api/v3/reports'), { headers: { Authorization:'Bearer '+session.token } });
           if (reports.ok && (await reports.json()).items?.length >= 3) {
             resolveReady();
             return;

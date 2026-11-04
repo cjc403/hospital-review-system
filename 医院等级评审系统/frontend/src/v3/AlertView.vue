@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import { hasPermission } from "../auth";
 import { computed, onMounted, ref } from "vue";
 import { errorText, v3 } from "./api";
 import { alertActionLabels, alertActions, alertTypeLabels } from "./domain";
 import type { V3Alert, V3Improvement } from "./types";
-import { notify, role } from "../store";
+import { notify } from "../store";
 
 const alerts = ref<V3Alert[]>([]);
 const improvements = ref<V3Improvement[]>([]);
@@ -18,8 +19,9 @@ const improveDraft = ref({ rootCause: "", action: "", owner: "", dueDate: "2026-
 const reviewing = ref("");
 const reviewDraft = ref({ conclusion: "partially_improved", note: "", evidenceItemId: "" });
 
-const canWrite = computed(() => role.value === "quality");
-const canHandleAlert = computed(() => role.value === "quality" || role.value === "department");
+const canWrite = computed(() => hasPermission("improvement.write"));
+const canReview = computed(() => hasPermission("improvement.review"));
+const canHandleAlert = computed(() => hasPermission("alert.ack"));
 const statusLabels: Record<string, string> = {
   open: "待确认",
   acknowledged: "已确认",
@@ -60,7 +62,8 @@ async function loadImprovements() {
 
 function visibleAlertActions(status: V3Alert["status"]): string[] {
   const actions = alertActions(status);
-  return role.value === "department" ? actions.filter((action) => action === "ack") : actions;
+  if (!canHandleAlert.value) return [];
+  return hasPermission("alert.manage") ? actions : actions.filter((action) => action === "ack");
 }
 
 async function act(alert: V3Alert, action: string) {
@@ -95,7 +98,7 @@ async function createImprovement(alert: V3Alert) {
     });
     notify("已由预警创建整改项目");
     improving.value = "";
-    await Promise.all([loadAlerts(), loadImprovements()]);
+    await Promise.all([...(hasPermission("alert.read") ? [loadAlerts()] : []), ...(hasPermission("improvement.read") ? [loadImprovements()] : [])]);
   } catch (e) {
     notify(errorText(e), true);
   } finally {
@@ -125,7 +128,7 @@ async function review(improvement: V3Improvement) {
 }
 
 onMounted(async () => {
-  await Promise.all([loadAlerts(), loadImprovements()]);
+  await Promise.all([...(hasPermission("alert.read") ? [loadAlerts()] : []), ...(hasPermission("improvement.read") ? [loadImprovements()] : [])]);
 });
 </script>
 
@@ -136,7 +139,7 @@ onMounted(async () => {
       <button class="text-button" @click="loadAlerts">重试</button>
     </div>
 
-    <section class="table-card">
+    <section v-if="hasPermission('alert.read')" class="table-card">
       <div class="section-heading">
         <h3>预警</h3>
         <div class="inline-filters">
@@ -275,7 +278,7 @@ onMounted(async () => {
                 </td>
                 <td>
                   <button
-                    v-if="canWrite && improvement.status !== 'closed'"
+                    v-if="canReview && improvement.status !== 'closed'"
                     class="button-small"
                     @click="reviewing = reviewing === improvement.id ? '' : improvement.id"
                   >

@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import { hasPermission } from "../auth";
 import { computed, onMounted, ref } from "vue";
 import { errorText, v3 } from "./api";
 import type { V3Batch, V3BatchDetail, V3Mapping } from "./types";
-import { notify, role } from "../store";
+import { notify } from "../store";
 
 const sources = ref<{ code: string; name: string; kind: string }[]>([]);
 const batches = ref<V3Batch[]>([]);
@@ -27,7 +28,7 @@ const fieldDraft = ref<Record<string, string>>({
 });
 const codeMapDraft = ref("{}");
 
-const canWrite = computed(() => ["quality", "information"].includes(role.value));
+const canWrite = computed(() => hasPermission("batch.write"));
 
 async function loadSources() {
   try {
@@ -202,15 +203,15 @@ onMounted(async () => {
       <div class="form-grid">
         <label v-for="(label, key) in { metricCode: '指标编码列', deptCode: '科室列', numerator: '分子列', denominator: '分母列', value: '数值列', unit: '单位列' }" :key="key" class="field">
           <span>{{ label }}</span>
-          <input v-model="fieldDraft[key]" :placeholder="key" />
+          <input :disabled="!hasPermission('mapping.write')" v-model="fieldDraft[key]" :placeholder="key" />
         </label>
       </div>
       <label class="field">
         <span>编码映射（JSON：{"metric":{"别名":"i01"},"dept":{"心内科":"CARD"}}）</span>
-        <textarea v-model="codeMapDraft" rows="3" spellcheck="false"></textarea>
+        <textarea :disabled="!hasPermission('mapping.write')" v-model="codeMapDraft" rows="3" spellcheck="false"></textarea>
       </label>
       <div class="form-actions">
-        <button v-if="canWrite" class="button primary" :disabled="busy" @click="saveMapping">保存映射</button>
+        <button v-if="hasPermission('mapping.write')" class="button primary" :disabled="busy" @click="saveMapping">保存映射</button>
         <span class="hint">保存后对后续导入生效，旧批次保留原映射版本</span>
       </div>
     </section>
@@ -294,14 +295,14 @@ onMounted(async () => {
         </div>
         <div class="inline-filters">
           <button
-            v-if="detail.batch.status === 'validated'"
+            v-if="canWrite && detail.batch.status === 'validated'"
             class="button primary"
             :disabled="busy"
             @click="apply"
           >
             应用并计算结果
           </button>
-          <button class="button" :disabled="busy" @click="replay">重放</button>
+          <button v-if="canWrite" class="button" :disabled="busy" @click="replay">重放</button>
         </div>
       </div>
 

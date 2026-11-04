@@ -42,7 +42,7 @@ public class ReportService {
     @Transactional
     @SuppressWarnings("unchecked")
     public Map<String, Object> create(AuthContext ctx, JsonNode body, String requestId) {
-        ctx.require("review_office");
+        ctx.requirePermission("report.write");
         String versionId = text(body, "versionId");
         String from = text(body, "periodFrom");
         String to = text(body, "periodTo");

@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import { hasPermission } from "../auth";
 import { computed, onMounted, ref } from "vue";
 import { errorText, v2 } from "./api";
 import type { V2Package } from "./types";
-import { notify, role } from "../store";
+import { notify } from "../store";
 
 interface PrereqRow {
   code: string;
@@ -33,7 +34,7 @@ const error = ref("");
 const editing = ref("");
 const draft = ref({ compliance: "compliant", workflow: "accepted", statement: "" });
 
-const canEdit = computed(() => role.value === "quality");
+const canEdit = computed(() => hasPermission("assessment.write"));
 const nonCompliant = computed(() =>
   items.value.filter((item) => item.compliance === "non_compliant"),
 );

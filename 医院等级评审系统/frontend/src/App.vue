@@ -11,12 +11,9 @@ import {
   TrendingUp,
   FileText,
   Settings2,
-  ChevronDown,
   Bell,
   RefreshCw,
-  Search,
   Hospital,
-  PanelLeftClose,
   PanelLeftOpen,
   FolderTree,
   Network,
@@ -24,12 +21,9 @@ import {
   CheckCircle2,
   AlertCircle,
   ChevronRight,
-  CircleHelp,
 } from "lucide-vue-next";
 import {
   workspace,
-  role,
-  roleLabels,
   loading,
   busy,
   loadError,
@@ -44,10 +38,19 @@ import PrerequisitesView from "./components/PrerequisitesView.vue";
 import ScoreView from "./components/ScoreView.vue";
 import ImprovementsView from "./components/ImprovementsView.vue";
 import PoliciesView from "./components/PoliciesView.vue";
-import OperationsView from "./components/OperationsView.vue";
+import OperationsView from "./components/AuthAuditView.vue";
+import MaintenanceView from "./components/OperationsView.vue";
+import LoginView from "./components/LoginView.vue";
+import MyWorkbench from "./components/MyWorkbench.vue";
+import AccountsView from "./components/AccountsView.vue";
+import PasswordDialog from "./components/PasswordDialog.vue";
+import { currentUser, restoring, restoreSession, logout, onSessionCleared } from "./auth";
+import { canOpenPage } from "./access";
 import ReviewWorkbench from "./v2/ReviewWorkbench.vue";
 import V3Workbench from "./v3/V3Workbench.vue";
-const pages = [
+const allPages = [
+  { id: "home", name: "我的工作台", icon: Hospital, component: MyWorkbench, group: "我的工作" },
+  { id: "accounts", name: "账号管理", icon: Settings2, component: AccountsView, group: "账号与权限" },
   {
     id: "dashboard",
     name: "评审总览",
@@ -119,17 +122,27 @@ const pages = [
     group: "系统管理",
   },
   {
+    id: "maintenance",
+    name: "运行维护",
+    icon: Settings2,
+    component: MaintenanceView,
+    group: "系统管理",
+  },
+  {
     id: "operations",
-    name: "运行与审计",
+    name: "审计记录",
     icon: Settings2,
     component: OperationsView,
     group: "系统管理",
   },
 ];
-const activePage = ref("dashboard"),
+const pages = computed(() => allPages.filter(page => canOpenPage(page.id)));
+const passwordOpen = ref(false);
+const refreshKey = ref(0);
+const activePage = ref("home"),
   sidebarOpen = ref(false);
 const current = computed(
-  () => pages.find((x) => x.id === activePage.value) || pages[0]!,
+  () => pages.value.find((x) => x.id === activePage.value) || pages.value[0]!,
 );
 const todoCount = computed(
   () =>
@@ -137,25 +150,31 @@ const todoCount = computed(
       .length || 0,
 );
 function navigate(page: string) {
+  if (!canOpenPage(page)) return;
   activePage.value = page;
   sidebarOpen.value = false;
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
-watch(role, async () => {
-  workspace.value = null;
-  await loadWorkspace();
+const independent = computed(() => ['home','accounts','operations','workbench','v3'].includes(current.value.id));
+watch([activePage, currentUser], async () => {
+  if (currentUser.value && !independent.value && !workspace.value) await loadWorkspace();
 });
-onMounted(loadWorkspace);
+onSessionCleared(() => { activePage.value='home'; passwordOpen.value=false; });
+async function refreshCurrent() { if (independent.value) refreshKey.value++; else await loadWorkspace(); }
+async function signOut() { try { await logout(); } catch { /* local session is cleared even if offline */ } }
+onMounted(restoreSession);
 </script>
 <template>
-  <div class="app-shell">
+  <div v-if="restoring" class="auth-restoring"><span class="spinner"></span>正在恢复登录会话…</div>
+  <LoginView v-else-if="!currentUser" />
+  <div v-else class="app-shell">
     <div
       v-if="sidebarOpen"
       class="sidebar-scrim"
       @click="sidebarOpen = false"
     ></div>
     <aside class="sidebar" :class="{ open: sidebarOpen }">
-      <a class="brand" href="#" @click.prevent="navigate('dashboard')"
+      <a class="brand" href="#" @click.prevent="navigate('home')"
         ><span class="brand-icon"
           ><Activity :size="26" :stroke-width="2.4"
         /></span>
@@ -164,7 +183,7 @@ onMounted(loadWorkspace);
         </div></a
       >
       <div class="workspace-label">
-        <span class="live-dot"></span>医院等级评审工作台<span>DEMO</span>
+        <span class="live-dot"></span>医院等级评审工作台
       </div>
       <nav aria-label="主导航">
         <template v-for="(page, index) in pages" :key="page.id"
@@ -191,14 +210,7 @@ onMounted(loadWorkspace);
         ></template>
       </nav>
       <div class="sidebar-bottom">
-        <div class="sidebar-demo">
-          <ShieldCheck :size="18" />
-          <div>
-            <strong>本地演示 · 合成数据</strong
-            ><small>为质量改进提供可追溯依据</small>
-          </div>
-        </div>
-        <span class="sidebar-version">HQR WORKSPACE <i>v0.1 Demo</i></span>
+        <span class="sidebar-version">HQR WORKSPACE <i>v3</i></span>
       </div>
     </aside>
     <div class="main-shell">
@@ -216,53 +228,26 @@ onMounted(loadWorkspace);
           </div>
         </div>
         <div class="topbar-right">
-          <span class="environment-pill"
-            ><span class="live-dot"></span>演示环境 / 合成数据</span
-          ><button
+          <button
             class="icon-button"
             aria-label="刷新工作区"
             title="刷新工作区"
             :disabled="loading || busy"
-            @click="loadWorkspace"
+            @click="refreshCurrent"
           >
             <RefreshCw :size="17" :class="{ spin: loading }" /></button
           ><button
             class="icon-button notification-button"
-            aria-label="查看待审核补录"
-            title="查看待审核补录"
-            @click="navigate('manual')"
+            aria-label="查看我的工作台"
+            title="查看我的工作台"
+            @click="navigate('home')"
           >
             <Bell :size="18" /><span v-if="todoCount"></span>
           </button>
           <div class="topbar-divider"></div>
-          <div class="role-select">
-            <span class="avatar">{{
-              role === "quality"
-                ? "质"
-                : role === "leader"
-                  ? "院"
-                  : role === "department"
-                    ? "科"
-                    : "信"
-            }}</span>
-            <div>
-              <small>演示角色</small
-              ><select
-                v-model="role"
-                :disabled="busy"
-                aria-label="切换演示角色"
-              >
-                <option
-                  v-for="(name, key) in roleLabels"
-                  :key="key"
-                  :value="key"
-                >
-                  {{ name }}
-                </option>
-              </select>
-            </div>
-            <ChevronDown :size="13" />
-          </div>
+          <div class="role-select"><span class="avatar">{{currentUser.displayName.slice(0,1)}}</span><div><small>{{currentUser.roleName}}</small><strong>{{currentUser.displayName}}</strong></div></div>
+          <button class="text-button" @click="passwordOpen=true">修改密码</button>
+          <button class="text-button" @click="signOut">退出</button>
         </div>
       </header>
       <main>
@@ -273,12 +258,10 @@ onMounted(loadWorkspace);
               {{ current.id === "dashboard" ? "评审工作总览" : current.name }}
             </h1>
             <p>
-              {{ workspace?.meta.hospitalName || "江城市第一人民医院"
+              {{ currentUser.hospitalName
               }}<span class="title-divider">|</span
               >{{
-                role === "department"
-                  ? "本科室视角 · 心血管内科 CARD"
-                  : "医院等级评审协同工作台"
+                currentUser.deptName ? `授权科室 · ${currentUser.deptName} ${currentUser.deptCode}` : "医院等级评审协同工作台"
               }}
             </p>
           </div>
@@ -290,10 +273,11 @@ onMounted(loadWorkspace);
             </div>
           </div>
         </div>
-        <div v-if="loading && !workspace" class="card initial-loader">
+        <component v-if="independent" :is="current.component" :key="`${current.id}-${currentUser.id}-${refreshKey}`" @navigate="navigate"/>
+        <div v-else-if="loading && !workspace" class="card initial-loader">
           <span class="spinner"></span>
           <h3>正在加载工作区</h3>
-          <p>从本地服务读取最新演示数据…</p>
+          <p>从本地服务读取最新数据…</p>
         </div>
         <div v-else-if="loadError && !workspace" class="card initial-loader">
           <AlertCircle :size="36" class="negative" />
@@ -310,26 +294,19 @@ onMounted(loadWorkspace);
               重试刷新
             </button>
           </div>
-          <div v-if="role !== 'quality'" class="role-notice">
-            <ShieldCheck :size="15" />当前为{{ roleLabels[role] }}演示视角。{{
-              role === "department"
-                ? "仅展示本科 CARD 数据；管理操作由质控执行。"
-                : role === "information"
-                  ? "可登记政策元数据；成员明细不开放。"
-                  : "查看全院汇总与试算，成员明细不开放。"
-            }}
-          </div>
+          <div class="role-notice"><ShieldCheck :size="15"/>{{currentUser.roleName}} · {{currentUser.deptName || '本院范围'}} · 操作与数据范围以当前账号授权为准</div>
           <component
             :is="current.component"
-            :key="`${current.id}-${role}`"
+            :key="`${current.id}-${currentUser.id}-${refreshKey}`"
             @navigate="navigate"
         /></template>
         <footer class="app-footer">
-          <span>医评智控 · 医院等级评审演示系统</span
-          ><span>本地运行 · 合成数据 · 等次仅供试算</span>
+          <span>医评智控 · 医院等级评审系统</span
+          ><span>质量监测 · 协同评审 · 持续改进</span>
         </footer>
       </main>
     </div>
+    <PasswordDialog v-if="passwordOpen" @close="passwordOpen=false"/>
     <Transition name="toast"
       ><div
         v-if="notice"

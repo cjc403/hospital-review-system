@@ -6,9 +6,22 @@ import { resolve } from 'node:path';
 const base = process.env.DEMO_BASE_URL ?? 'http://127.0.0.1:18173';
 const output = fileURLToPath(new URL('../.runtime/', import.meta.url));
 let checks = 0;
+const credentials = { quality: 'review.admin', leader: 'leader.demo', department: 'card.staff', information: 'audit.viewer' };
+const sessions = new Map();
+async function authHeaders(role='quality') {
+  if(!role)return {};
+  const username=credentials[role]??role;
+  if(!sessions.has(username)) {
+    const response=await fetch(base+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password:'cjc2003822cjc'})});
+    assert.equal(response.status,200,`Login ${username}`);
+    sessions.set(username,(await response.json()).token);
+  }
+  return {Authorization:'Bearer '+sessions.get(username)};
+}
+
 async function request(path, { method = 'GET', body, role = 'quality', expected = 200 } = {}) {
   const response = await fetch(base + '/api' + path, {
-    method, headers: { 'X-Demo-Role': role, ...(body instanceof FormData || body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+    method, headers: { ...(await authHeaders(role)), ...(body instanceof FormData || body === undefined ? {} : { 'Content-Type': 'application/json' }) },
     body: body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body),
   });
   const payload = await response.json();
@@ -60,7 +73,7 @@ try {
   const score = state.scoreRuns.find(x => x.id === run.id);
   assert.ok(score && score.trial);
   const originalScore = JSON.stringify(score.items);
-  const beforeReport = await fetch(base + `/api/reports/${run.id}`, { headers: { 'X-Demo-Role': 'quality' } });
+  const beforeReport = await fetch(base + `/api/reports/${run.id}`, { headers: { ...(await authHeaders()) } });
   assert.equal(beforeReport.status, 200);
   const beforeBytes = Buffer.from(await beforeReport.arrayBuffer());
   assert.equal(beforeBytes.subarray(0, 2).toString(), 'PK');
@@ -79,14 +92,14 @@ try {
   state = await request('/workspace');
   assert.equal(state.scoreRuns.find(x => x.id === deferred.id).grade, 'deferred');
   assert.equal(JSON.stringify(state.scoreRuns.find(x => x.id === run.id).items), originalScore);
-  const afterReport = await fetch(base + `/api/reports/${run.id}`, { headers: { 'X-Demo-Role': 'quality' } });
+  const afterReport = await fetch(base + `/api/reports/${run.id}`, { headers: { ...(await authHeaders()) } });
   assert.equal(afterReport.status, 200);
   await writeFile(resolve(output, 'qa-report-after.docx'), Buffer.from(await afterReport.arrayBuffer()));
   passed('evidence upload, accepted noncompliance defers score, historical score unchanged');
 
   const blocked = state.policies.find(x => x.impacts.includes('scoring_rule'));
   if (blocked) {
-    const response = await fetch(base + `/api/policies/${blocked.id}/confirm`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Demo-Role': 'quality' }, body: '{}' });
+    const response = await fetch(base + `/api/policies/${blocked.id}/confirm`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(await authHeaders()) }, body: '{}' });
     assert.ok(response.status === 400 || response.status === 409);
   }
   const sample = await request('/audit-samples', { method: 'POST', body: { period: '2026-09' } });
@@ -114,7 +127,7 @@ try {
   async function v2request(path, { method = 'GET', body, role = 'quality', expected = 200 } = {}) {
     const response = await fetch(base + '/api/v2' + path, {
       method,
-      headers: { ...(role ? { 'X-Demo-Role': role } : {}), ...(body instanceof FormData || body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+      headers: { ...(await authHeaders(role)), ...(body instanceof FormData || body === undefined ? {} : { 'Content-Type': 'application/json' }) },
       body: body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body),
     });
     const payload = await response.json().catch(() => ({}));
@@ -204,7 +217,7 @@ try {
   const itemId = secondVersion.item.id;
   await v2request(`/evidence/${itemId}/review`, { method: 'POST', body: { decision: 'approved', note: '集成检查通过' } });
   await v2request(`/evidence/${itemId}/review`, { method: 'POST', body: { decision: 'rejected' }, expected: 409 });
-  const download = await fetch(base + `/api/v2/evidence/versions/${firstVersion.version.id}/download`, { headers: { 'X-Demo-Role': 'quality' } });
+  const download = await fetch(base + `/api/v2/evidence/versions/${firstVersion.version.id}/download`, { headers: { ...(await authHeaders()) } });
   assert.equal(download.status, 200);
   assert.equal(await download.text(), 'v2 evidence version one');
   passed('v2 evidence versions, hash idempotency, review and old version download');
@@ -241,12 +254,12 @@ try {
   const runA = await v2request('/score-runs', { method: 'POST', body: { versionId: version.id, cycleStart: 2023, cycleEnd: 2026 } });
   assert.ok(runA.run.includedCount > 0);
   assert.ok(runA.items.length >= runA.run.includedCount);
-  const report = await fetch(base + `/api/v2/score-runs/${runA.run.id}/report`, { headers: { 'X-Demo-Role': 'quality' } });
+  const report = await fetch(base + `/api/v2/score-runs/${runA.run.id}/report`, { headers: { ...(await authHeaders()) } });
   assert.equal(report.status, 200);
   const reportBytes = Buffer.from(await report.arrayBuffer());
   assert.equal(reportBytes.subarray(0, 2).toString(), 'PK');
   assert.ok(reportBytes.includes(Buffer.from('word/document.xml')));
-  const rerun = await fetch(base + `/api/v2/score-runs/${runA.run.id}/report`, { headers: { 'X-Demo-Role': 'quality' } });
+  const rerun = await fetch(base + `/api/v2/score-runs/${runA.run.id}/report`, { headers: { ...(await authHeaders()) } });
   assert.ok(Buffer.from(await rerun.arrayBuffer()).equals(reportBytes), 'snapshot report must be byte-stable');
   const runB = await v2request('/score-runs', { method: 'POST', body: { versionId: version.id, cycleStart: 2023, cycleEnd: 2026 } });
   const comparison = await v2request(`/score-runs/${runA.run.id}/compare/${runB.run.id}`);
@@ -288,7 +301,7 @@ try {
   async function v3request(path, { method = 'GET', body, role = 'quality', expected = 200 } = {}) {
     const response = await fetch(base + '/api/v3' + path, {
       method,
-      headers: { ...(role ? { 'X-Demo-Role': role } : {}), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+      headers: { ...(await authHeaders(role)), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     const payload = await response.json().catch(() => ({}));
@@ -420,12 +433,12 @@ try {
   });
   assert.ok(v3Report.metricCount > 0);
   assert.ok(v3Report.batchIds.length > 0);
-  const v3DocResponse = await fetch(base + `/api/v3/reports/${v3Report.id}/document`, { headers: { 'X-Demo-Role': 'quality' } });
+  const v3DocResponse = await fetch(base + `/api/v3/reports/${v3Report.id}/document`, { headers: { ...(await authHeaders()) } });
   assert.equal(v3DocResponse.status, 200);
   const v3Doc = Buffer.from(await v3DocResponse.arrayBuffer());
   assert.equal(v3Doc.subarray(0, 2).toString(), 'PK');
   assert.ok(v3Doc.includes(Buffer.from('word/document.xml')));
-  const v3DocAgain = await fetch(base + `/api/v3/reports/${v3Report.id}/document`, { headers: { 'X-Demo-Role': 'quality' } });
+  const v3DocAgain = await fetch(base + `/api/v3/reports/${v3Report.id}/document`, { headers: { ...(await authHeaders()) } });
   assert.ok(Buffer.from(await v3DocAgain.arrayBuffer()).equals(v3Doc), 'v3 报告必须字节稳定');
   passed('v3 report snapshot is stable and lists referenced batches');
 

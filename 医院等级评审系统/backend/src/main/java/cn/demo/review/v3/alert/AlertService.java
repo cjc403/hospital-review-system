@@ -58,10 +58,21 @@ public class AlertService {
         return Map.of("items", items);
     }
 
+    public long openAlertCount(AuthContext ctx) {
+        Long count=jdbc.queryForObject("SELECT COUNT(*) FROM v3_alert WHERE hospital_id=? AND status NOT IN ('resolved','ignored') AND (? IS NULL OR dept_code=?)",Long.class,ctx.hospitalId(),ctx.deptCode(),ctx.deptCode());
+        return count==null?0:count;
+    }
+    public long openImprovementCount(AuthContext ctx) {
+        var rows=jdbc.query("SELECT alert_id,source_type,source_id FROM v3_improvement WHERE hospital_id=? AND status<>'closed'",(rs,i)->{
+            Map<String,Object> row=new LinkedHashMap<>();row.put("alertId",rs.getString(1));row.put("sourceType",rs.getString(2));row.put("sourceId",rs.getString(3));return row;
+        },ctx.hospitalId());
+        return ctx.deptScoped()?rows.stream().filter(row->ctx.deptCode().equals(improvementDept(ctx,row))).count():rows.size();
+    }
+
     @Transactional
     public Map<String, Object> transition(AuthContext ctx, String alertId, String action,
                                           JsonNode body, String requestId) {
-        ctx.require("review_office", "dept_head");
+        ctx.requirePermission("ack".equals(action)?"alert.ack":"alert.manage");
         Map<String, Object> alert = alertRow(ctx, alertId);
         String current = String.valueOf(alert.get("status"));
         if (TERMINAL.contains(current)) throw V2Exception.immutable("预警已结束，不能再变更");
@@ -107,7 +118,7 @@ public class AlertService {
 
     @Transactional
     public Map<String, Object> createFromAlert(AuthContext ctx, JsonNode body, String requestId) {
-        ctx.require("review_office");
+        ctx.requirePermission("improvement.write");
         String alertId = text(body, "alertId");
         Map<String, Object> alert = alertRow(ctx, alertId);
         Double baseline = lookupResultValue(ctx, (String) alert.get("resultId"));
@@ -125,9 +136,15 @@ public class AlertService {
     /** 条款抽查或指标结果也可以直接建整改，来源与基线一并留痕。 */
     @Transactional
     public Map<String, Object> createFromSource(AuthContext ctx, JsonNode body, String requestId) {
-        ctx.require("review_office");
+        ctx.requirePermission("improvement.write");
         String sourceType = text(body, "sourceType");
         String sourceId = text(body, "sourceId");
+        if(ctx.deptScoped()) {
+            String table=switch(sourceType){case "result"->"metric_result";case "task"->"review_task";default->null;};
+            if(table==null)throw V2Exception.forbidden("科室只能使用本科室结果或任务发起整改");
+            var scoped=jdbc.queryForList("SELECT dept_code FROM "+table+" WHERE id=? AND hospital_id=?",sourceId,ctx.hospitalId());
+            if(scoped.isEmpty()||!Objects.equals(ctx.deptCode(),scoped.get(0).get("dept_code")))throw V2Exception.notFound("来源不在本科室范围");
+        }
         String metricCode = null;
         String metricName = null;
         Double baseline = null;
@@ -246,7 +263,7 @@ public class AlertService {
 
     @Transactional
     public Map<String, Object> reviewImprovement(AuthContext ctx, String id, JsonNode body, String requestId) {
-        ctx.require("review_office");
+        ctx.requirePermission("improvement.review");
         Map<String, Object> improvement = improvementRow(ctx, id);
         if ("closed".equals(improvement.get("status"))) throw V2Exception.immutable("整改已关闭，不能重复复核");
         String conclusion = text(body, "conclusion");
@@ -279,6 +296,7 @@ public class AlertService {
                         + " WHERE id=? AND hospital_id=?",
                 (rs, i) -> alertRow(rs), id, ctx.hospitalId());
         if (rows.isEmpty()) throw V2Exception.notFound("预警不存在或不在可见范围");
+        if(ctx.deptScoped()&&!Objects.equals(ctx.deptCode(),rows.get(0).get("deptCode")))throw V2Exception.notFound("预警不在本科室范围");
         return rows.get(0);
     }
 

@@ -2,6 +2,7 @@
 **/target/
 **/dist/
 **/.runtime/
+.runtime-backups/
 **/test-results/
 **/playwright-report/
 **/*.log

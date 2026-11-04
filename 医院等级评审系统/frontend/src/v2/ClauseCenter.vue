@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import { hasPermission } from "../auth";
 import { computed, onMounted, ref, watch } from "vue";
 import { errorText, v2 } from "./api";
 import type { V2Clause, V2Package, V2VersionDetail } from "./types";
-import { notify, role } from "../store";
+import { notify } from "../store";
 
 const packages = ref<V2Package[]>([]);
 const versionId = ref("");
@@ -13,7 +14,7 @@ const loading = ref(false);
 const busy = ref(false);
 const error = ref("");
 
-const canEdit = computed(() => role.value === "quality");
+const canEdit = computed(() => hasPermission("standard.write"));
 
 const clauses = computed(() =>
   (detail.value?.clauses || []).filter(
@@ -184,7 +185,7 @@ onMounted(loadPackages);
               >{{ detail.counts.indicators }} /
               {{ detail.counts.prerequisites }}</strong
             >
-            <span class="metric-foot">演示覆盖集，非完整 203 条</span>
+            <span class="metric-foot">覆盖集，非完整 203 条</span>
           </div>
           <div class="metric-card">
             <span class="metric-label">校验和</span>

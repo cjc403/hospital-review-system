@@ -50,6 +50,10 @@ public class TaskService {
             sql.append(" AND status=?");
             args.add(status);
         }
+        if(ctx.accountSession() && ctx.has("expert")) {
+            if(ctx.clauseCodes().isEmpty())return Map.of("items",List.of(),"summary",summaryOf(List.of()));
+            sql.append(" AND clause_code IN ("+String.join(",",Collections.nCopies(ctx.clauseCodes().size(),"?"))+")");args.addAll(ctx.clauseCodes());
+        }
         sql.append(" ORDER BY due_date, created_at");
         String today = LocalDate.now().toString();
         List<Map<String, Object>> items = jdbc.query(sql.toString(), (rs, i) -> {
@@ -90,7 +94,7 @@ public class TaskService {
 
     @Transactional
     public Map<String, Object> assign(AuthContext ctx, JsonNode body, String requestId) {
-        ctx.require("review_office");
+        ctx.requirePermission("task.assign");
         String versionId = text(body, "versionId");
         String deptCode = text(body, "deptCode");
         String requestKey = text(body, "requestKey");
@@ -163,16 +167,15 @@ public class TaskService {
         String comment = optional(body, "comment", "");
         String dept = (String) task.get("deptCode");
 
-        if (ctx.has("review_office")) {
-            // 评审办可执行全部合法流转
-        } else if (ctx.has("dept_head")) {
-            ctx.requireDept(dept);
-            Set<String> allowedForDept = Set.of("todo|in_progress", "returned|in_progress", "in_progress|submitted");
-            if (!allowedForDept.contains(current + "|" + next)) {
-                throw V2Exception.forbidden("科室负责人只能推进本科室任务，且不能审核或退回");
-            }
-        } else {
-            throw V2Exception.forbidden("当前角色不能变更任务状态");
+        ctx.requireDept(dept);
+        ctx.requireClause(String.valueOf(task.get("clauseCode")));
+        if(ctx.accountSession()) {
+            if(Set.of("accepted","returned").contains(next))ctx.requirePermission("task.review");
+            else if("cancelled".equals(next))ctx.requirePermission("task.assign");
+            else ctx.requirePermission("task.progress");
+        } else if (!ctx.has("review_office")) {
+            ctx.require("dept_head");
+            if(!Set.of("todo|in_progress","returned|in_progress","in_progress|submitted").contains(current+"|"+next))throw V2Exception.forbidden("科室角色不能审核或退回");
         }
 
         Map<String, Set<String>> transitions = Map.of(
